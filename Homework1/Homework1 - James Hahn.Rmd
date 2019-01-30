@@ -1,0 +1,264 @@
+---
+title: "Statistical Learning - Homework 1"
+author: James Hahn
+output: pdf_document
+---
+
+###Chapter 2 - Exercise 1
+
+a) We have a lot of data points. Therefore, we can accurately model the true underlying population distribution of data points accurately. The book says, "The potential disadvantage of a parametric [inflexible] approach is that the model we choose will usually not match the true unknown form of f". So, since we have a lot of data points, we will most likely be able to accurately model the ground truth distribution with more parameters.  The flexible model will work best in this situation.
+
+\bigskip
+
+b) The book states, "But non-parametric approaches do suffer from a major disadvantage: since they do not reduce the problem of estimating f to a small number of parameters, a very large number of observations (far more than is typically needed for a parametric approach) is required in order to obtain an accurate estimate for f."  Since this problem has a small number of observations and a large number of predictors, these non-parametric models, which tend to represent flexible models, will not work.  Therefore, we need an inflexible model.
+
+\bigskip
+
+c) Flexible model because the slides reference a linear line as low flexibility, low variance, and high bias.  Therefore, if the relationship is non-linear, it will most likely fluctuate with the dataset, so we need a flexible model over an inflexible one. The book also states "if the true f is highly non-linear and we have an ample number of training observations, then we may do better using a highly flexible approach", so this proves my case.
+
+\bigskip
+
+d) If error term variance is high, then using a flexible model might increase the error even further due to addition of noise.  Therefore, we should use the inflexible model.
+
+###Chapter 2 - Exercise 2
+
+a) We need inference because we want the reasoning behind our decision, which is the salary. Prediction in this situation would just be determining the salary for a given CEO and company. This is also a regression problem since salary is continuous and nothing in the problem states the salary is split into discrete bins. n = 500. p = 3 (profit, # employees, industry). To change this into a classification problem, we could, as previously mentioned, place salaries into 10 bins. For example, the first bin, or class, are salaries from \$0-\$500k, second is \$500k-$1M, ..., \$5M+.  Then, there are now 10 classes and we place each CEO's salary into one of the classes.
+
+\bigskip
+
+b) This is a classification problem since there are two output classes, *success* and *failure*. We are also more interested in prediction since we do not care why the product will be successful or a failure, but rather solely which class it will fit into. n = 20. p = 13 (price charged, marketing budget, competition price, ten other variables).  If we want to modify this into a regression problem, we can predict the % success or % failure.  Then, the response is a continuous percentage value.
+
+\bigskip
+
+c) We care about prediction more than inference, since the problem directly states "We are interested in predicting the % change in...". This is a regression problem since percentages are continuous. n = 52 (number of weeks in 2012). p = 3 (% US market change, % British market change, % German market change). To change this into a classification problem, we can have five classes: "no change", "small change", "medium change", "strong change", "very strong change".  Then, insteading of predicting percentages, fit the relation of the USD/Euro to the world stock markets into one of the above five classes.
+
+###Chapter 2 - Exercise 5
+
+The positive of a very flexible model is that the a non-flexible, linear model may increase the error of the model's predictions.  The flexible approach is useful since it reduces bias, or the error of the model's predictions.
+
+On the other hand, very flexible models can lead to over-estimation of the model, caused by a greater number of model parameters, so the model overfits to noise, which in turn increases the model's error.  In prediction, inference is not important, a more flexible model is useful since all relationships/dependencies of the predictors can be taken into account and interpretability of the model is not as important.  When inference is more important than prediction, a less flexible model may have increased error, but can be easily interpreted due to decreased number of parameters, it is more robust to noise in the dataset, and overfitting is not as much of a concern.
+
+###Chapter 2 - Exercise 8
+
+a) 
+```{r}
+library(ISLR)
+
+college = read.csv("College.csv")
+```
+
+b) 
+```{r}
+rownames(college)=college[,1]
+fix(college)
+
+college = college[,-1]
+fix(college)
+```
+
+c)
+```{r}
+# i)
+summary(college)
+```
+
+```{r}
+# ii)
+pairs(college[,1:10])
+```
+
+```{r}
+# iii)
+plot(college$Private, college$Outstate)
+```
+
+```{r}
+# iv)
+Elite = rep("No", nrow(college))
+Elite[college$Top10perc > 50] = "Yes"
+Elite = as.factor(Elite)
+college = data.frame(college, Elite)
+summary(college)
+plot(college$Elite, college$Outstate)
+```
+
+```{r}
+# v)
+par(mfrow=c(2,2))
+hist(college$Enroll, breaks=5)
+hist(college$Outstate, breaks=20)
+hist(college$Grad.Rate)
+hist(college$Books, breaks=15)
+```
+
+```{r}
+# vi)
+summary(college$Enroll)
+summary(college$Outstate)
+summary(college$Grad.Rate)
+summary(college$Books)
+
+oddGradRate = college[college$Grad.Rate > 100,]
+nrow(oddGradRate)
+rownames(oddGradRate)
+
+enrollData = college[college$Enroll > 2000,]
+nrow(enrollData)
+rownames(enrollData)
+```
+
+There are two things to note here.  First, enrollment across all universities is very close in size, except for a few 71 universities with a significant number of students, which were output above.  These universities have more than 2000 new students enrolled, distinguishing these universities as behemoths in the academia world in terms of size.  One can clearly see the histogram for enrollment is heavily skewed to the right.
+
+Also, one discrepency appears in the graduation rates.  Czenovia College is the only college with a graduation rate over 100%, coming out to be 118%.
+
+The out-of-state tuition and books prices do not contain any surprising results or abnormally high or low values.
+
+###Chapter 2 - Exercise 9
+
+a)
+```{r}
+library(ISLR)
+
+auto = read.csv("Auto.csv", na.strings="?")
+auto = auto[complete.cases(auto), ]
+str(auto)
+summary(auto)
+```
+
+The quantitative variables are mpg, cylinders, displacement, horsepower, weight, acceleration, year, and origin.  The only qualitative predictor is name.
+
+b)
+```{r}
+range(auto$mpg)
+range(auto$cylinders)
+range(auto$displacement)
+range(auto$horsepower)
+range(auto$weight)
+range(auto$acceleration)
+range(auto$year)
+range(auto$origin)
+```
+
+Range of mpg is 9.0 to 46.6 . Range of cylinders is 3 to 8. Range of displacement is 68 to 455. Range of horsepower is 46 to 230. Range of weight is 1613 to 5140. Range of acceleration is 8.0 to 24.8 . Range of year is 70 to 82. Range of origin is 1 to 3.
+
+c)
+```{r}
+sapply(auto[, -c(0,9)], mean)
+sapply(auto[, -c(0,9)], sd)
+```
+
+Mean and Std of mpg are 23.446 and 7.805 respectively. Mean and Std of cylinders are 5.472 and 1.706 respectively. Mean and Std of displacement are 194.412 and 104.644 respectively. Mean and Std of horsepower are 104.469 and 38.491 respectively. Mean and Std of weight are 2977.584 and 849.403 respectively. Mean and Std of acceleration are 15.541 and 2.759 respectively. Mean and Std of year are 75.980 and 3.684 respectively. Mean and Std of origin are 1.577 and 0.806 respectively.
+
+d)
+```{r}
+autoNew = auto[-c(10:85), -c(0,9)]
+sapply(autoNew, mean)
+sapply(autoNew, sd)
+sapply(autoNew, range)
+```
+
+Mean and Std of mpg are 24.404 and 7.867 respectively. Mean and Std of cylinders are 5.373 and 1.654 respectively. Mean and Std of displacement are 187.241 and 99.678 respectively. Mean and Std of horsepower are 100.722 and 35.709 respectively. Mean and Std of weight are 2935.972 and 811.300 respectively. Mean and Std of acceleration are 15.727 and 2.694 respectively. Mean and Std of year are 77.146 and 3.106 respectively. Mean and Std of origin are 1.601 and 0.820 respectively.
+
+The range of mpg is 11.0 to 46.6 . The range of cylinders is 3 to 8. The range of displacement is 68 to 455. The range of horsepower is 46 to 230. The range of weight is 1649 to 4997. The range of acceleration is 8.5 to 24.8 . The range of year is 70 to 82. The range of origin is 1 to 3.
+
+e)
+```{r}
+pairs(auto)
+```
+
+We can see several strong, linear relationships between several pairs of variables. For example, the pairs of (displacement, weight), (displacement, horsepower), (horsepower, weight), (displacement, weight), (horsepower, weight), and (displacement, horsepower). Now relationships are poor, or no relationship exists. Meanwhile, a lot of the relationships with mpg and other predictors is a negative linear relationship, kind of curved downward. The auto's name correlates with none of the other predictors.
+
+f)
+Yes. In particular, displacement, horsepower, and weight would be somewhat accurate representations of predicting mpg. All three predictors represent negative, curved somewhat non-linear relationships. All data points are pretty bunched together, so it is very easy to fix a curve to that data without overfitting to a bunch of noise, such as in the (weight, acceleration) plot.
+
+###Chapter 2 - Exercise 10
+
+a)
+```{r}
+library(MASS)
+
+Boston
+?Boston
+```
+
+There are 506 rows and 14 columns. The crim column represents per capita crime rate by town. The zn column represents the proportion of residential land zoned for lots over 25,000 sq. ft. The indus column represents proportion of non-retail business acres per town. The chas column is the Charles River dummy variable (1 if tract bounds river; 0 otherwise). The nox column is nitrogen oxides concentration. The rm column is the average number of rooms per dwelling. The age column is the proportion of owner-occupied units built prior to 1940. The dis column is the weighted mean of distances to five Boston employment centres. The rad column is the index of accessibility to radial highways. The tax column is the full-value property-tax rate per $10,000. The ptratio column is the pupil-teacher ratio by town. The black column is the proportion of blacks by town. The lstat column is the lower status of the population. Finally, the medv column is the median value of owner-occupied homes.
+
+The columns are a representation of characteristics of Boston suburbs. Each row is data from one suburb.
+
+b)
+```{r}
+pairs(Boston)
+```
+
+Not many of the variables are correlated. From investigation, (rm, lstat), (rm, medv), (lstat, medv), and (age, lstat) all have somewhat strong relationships, while (black, dis) and (ptratio, lstat) have somewhat weak relationships, but it still exists.
+
+c) In general, not many variables are closely related to per capita crime rate. But, age has a weak positive relationship, distance has a weak negative relationship, and medv has a weak negative relationship.
+
+d)
+```{r}
+summary(Boston$crim)
+oddCrim = Boston[Boston$crim > 5.392, ]
+nrow(oddCrim)
+
+summary(Boston$tax)
+oddTax = Boston[Boston$tax > 580.5, ]
+nrow(oddTax)
+
+summary(Boston$ptratio)
+oddPt = Boston[Boston$ptratio > 4.2, ]
+nrow(oddPt)
+```
+
+Crime rates range from 0.006 to 88.976, a gap of 88.970. Since 1.5*IQR = 5.392, the crime rates were checked to see if any were significantly above the interquartile range. There were 103 suburbs with very high crime rates.
+
+Tax rates range from $187 to $711, a gap of 524. The same procedure was performed for tax rates. Outliers held values that were 1.5*IQR = 580.5 or higher. There were 137 suburbs with very high tax rates.
+
+Finally, pupil-teacher ratios range from 12.6 to 12.0, a gap of 9.4 . The same procedure was carried out again. A high pupil-teacher ratio is considered to be 1.5*IQR = 4.2 or higher. There were 506 suburbs with abnormally high ratios, which is almost the entire dataset.
+
+e) 
+```{r}
+boundCharles = Boston[Boston$chas == 1, ]
+nrow(boundCharles)
+```
+
+There are 35 suburbs that bound the Charles river.
+
+f)
+```{r}
+median(Boston$ptratio)
+```
+
+The median pupil-teacher ratio is 19.05 .
+
+g) 
+```{r}
+lowestMedv = Boston[Boston$medv == min(Boston$medv), ]
+print(lowestMedv)
+sapply(Boston, range)
+```
+
+There are actually two suburbs sharing the lowest median value of owner-occupied homes. Unfortunately, we are not given suburb names, but they are on row 399 and 406.
+
+For the row 399 suburb, crime rate is on the lower end, none of the residential land is zoned for lots over 25,000 sq ft, it is generally on the higher end in terms of non-retail businesses per acre, it does not border the Charles River, the nitrogen oxide concentration is very high, the average number of rooms is very high, every single house is built prior to 1940, the houses are very close to employment centres, houses are right next to the highway, they have high property tax rates, it has one of the highest pupil-teacher ratios among suburbs, the suburb is the blackest in Boston, and it has one of the highest percentages of lower status civilians.
+
+For the row 406 suburb, there are many of the same characteristics. Crime rate is high, none of the residential land is zoned for lots over 25,000 sq ft, there is a relatively high industrial content, it is not bordering the Charles River, the nitrogen oxide concentration is high, the number of rooms per dwelling is abnormally high, all of the homes were built prior to 1940, the houses are very close to Boston's employment centers, the suburb is right next to the highways, property tax rate is high, it has one of the highest pupil-teacher ratios, is one of the blackest suburbs in Boston, and in the middle in terms of lower-status population percentage.
+
+From what I see, these two suburbs generally have a lot of pollution, both noise and chemicals, crime rate is relatively high, there are a lot of lower status people living there, a lot of rooms are crammed in as possible, employment centers are nearby, and property tax rates are high. Therefore, they do not have access to many resources and suffer due to that. These are predominantly poorer neighborhoods.
+
+h) 
+```{r}
+bostonRooms = Boston[Boston$rm > 7, ]
+nrow(bostonRooms)
+bostonRooms = Boston[Boston$rm > 8, ]
+nrow(bostonRooms)
+print(bostonRooms)
+```
+
+There are 64 Boston suburbs averaging more than 7 rooms per dwelling.
+
+There are 13 Boston suburbs averaging more than 8 rooms per dwelling.
+
+In general, suburbs averaging more than 8 rooms per house have a large proportion of homes built prior to 1940, they have a relatively high proportion of blacks, not much of the population is of lower status, there is almost no crime, and the homes are on the pricier side of Boston. Also, nearly all of the Suburbs do not border the Charles River. Therefore, we can conclude many of these suburbs are historically black, old, and middle class.
+
+
+
