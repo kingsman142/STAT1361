@@ -1,0 +1,371 @@
+---
+title: "Statistical Learning - Homework 6 (Applied)"
+author: "James Hahn"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+### Chapter 7 - Exercise 8
+
+```{r}
+library(ISLR)
+options(warn=-1)
+
+glm.fit = glm(mpg ~ poly(displacement, 5), data = Auto)
+summary(glm.fit)
+
+newData = c()
+glm.fit = glm(mpg ~ poly(displacement, 2), data = Auto)
+newData$pred = predict(glm.fit, newdata = data.frame(displacement = seq(min(Auto$displacement), max(Auto$displacement), length.out = 100)))
+
+plot(Auto[, c("displacement", "mpg")])
+lines(seq(min(Auto$displacement), max(Auto$displacement), length.out = 100), newData$pred, type = "l", col = "red")
+```
+
+From the above statistics and plot, we can clearly see there is a fair argument that the relationship between displacement and mpg is non-linear. If you look at the above plot, the red polynomial regression line is curved. If the relationship was linear, the red line would be much straighter.
+
+### Chapter 7 - Exercise 9
+a) 
+```{r}
+library(MASS)
+
+attach(Boston)
+poly.fit = glm(nox ~ poly(dis, 3), data = Boston)
+summary(poly.fit)
+
+plot(Boston[, c('dis', 'nox')])
+pred = predict(poly.fit, data.frame(dis=seq(min(dis), max(dis), length.out = 100)))
+
+lines(seq(min(dis), max(dis), length.out = 100), pred, col = "red")
+```
+
+b)
+```{r}
+x = seq(min(dis), max(dis), length.out = 100)
+cols = rainbow(10)
+plot(Boston[, c('dis', 'nox')])
+rss = c()
+
+for(pwr in 1:10){
+  poly.fit = glm(nox ~ poly(dis, pwr), data = Boston)
+  pred = predict(poly.fit, data.frame(dis = x))
+  lines(x, pred, col = cols[pwr])
+  
+  rss = c(rss, sum(poly.fit$residuals^2))
+}
+
+legend(x = 'topright', legend = 1:10, col = cols, lty = c(1, 1), lwd = c(2, 2))
+
+plot(rss, xlab = "Degree of the polynomial", ylab = "RSS", type = "l")
+```
+
+c)
+```{r}
+library(boot)
+set.seed(1)
+
+poly.mse = c()
+for(degree in 1:7){
+  poly.fit = glm(nox ~ poly(dis, degree, raw = T), data = Boston)
+  mse = cv.glm(poly.fit, data = Boston, K = 10)$delta[1]
+  poly.mse = c(poly.mse, mse)
+}
+
+plot(poly.mse, type = "l", xlab = "Degree of the polynomial", ylab = "Cross-validation MSE")
+points(which.min(poly.mse), poly.mse[which.min(poly.mse)], col = "red", pch = 20, cex = 2)
+```
+
+Clearly, from the above graphic, the polynomial with the smallest MSE is the one with degree 4.
+
+d)
+```{r}
+library(splines)
+library(MASS)
+
+spline.fit = lm(nox ~ bs(dis, df = 4), data = Boston)
+x = seq(min(Boston[, "dis"]), max(Boston[, "dis"]), length.out = 100)
+y = predict(spline.fit, data.frame(dis = x))
+
+plot(Boston[, c("dis", "nox")], ylim = c(0, 1))
+lines(x, y, col = cols[4])
+```
+
+From the above plot, the polynomial with 4 degrees of freedom is shown above. I went ahead and used 100 knots just so the curve was as smooth as possible; using something like 5 knots makes it a lot jumpier/jagged. I figured 100 knots is a safe number to have in order to get the full power of the model while still making it look nice and ensuring it fits the data.
+
+e)
+```{r}
+plot(Boston[, c("dis", "nox")], ylim = c(0, 1))
+
+x = seq(min(Boston[, "dis"]), max(Boston[, "dis"]), length.out = 100)
+
+rss = c()
+for(df in 3:10){
+  spline.fit = lm(nox ~ bs(dis, df = df), data = Boston)
+  y = predict(spline.fit, data.frame(dis = x))
+  lines(x, y, col = cols[df])
+  
+  rss = c(rss, sum(spline.fit$residuals^2))
+}
+
+legend(x = "topright", legend = 3:10, text.col = cols[3:10], text.width = 0.5, bty = "n", horiz = T)
+
+plot(3:10, rss, xlab = "Degrees of freedom", ylab = "Train RSS", type = "l")
+```
+
+The model with the lowest training RSS is the one with 10 degrees of freedom. However, it's important to note in the above graph the scale on the y-axis does not have a large range. As such, all models are very close to being the same; the one with 10 df is only marginally better.
+
+f)
+```{r}
+library(boot)
+
+set.seed(1)
+spline.mse = c()
+
+for(df in 3:10){
+  Boston.model = model.frame(nox ~ bs(dis, df = df), data = Boston)
+  names(Boston.model) = c("nox", "bs.dis")
+  
+  spline.fit = glm(nox ~ bs.dis, data = Boston.model)
+  mse = cv.glm(spline.fit, data = Boston.model, K = 10)$delta[1]
+  spline.mse = c(spline.mse, mse)
+}
+
+plot(3:10, spline.mse, type = "l", xlab = "Degrees of freedom", ylab = "Cross-validation Spline MSE")
+
+x = which.min(spline.mse)
+points(x + 2, spline.mse[x], col = "red", pch = 20, cex = 2)
+```
+
+Clearly, from the above plot, the model with 6 degrees of freedom has the smallest MSE by a very small margin compared to the other models.
+
+### Chapter 7 - Exercise 10
+a)
+```{r}
+library(ISLR)
+library(leaps)
+set.seed(1)
+
+train = sample(1:nrow(College), 500)
+test = -train
+
+forward = regsubsets(Outstate ~ ., data = College, method = "forward", nvmax = 17)
+
+plot(1 / nrow(College) * summary(forward)$rss, type = "l", xlab = "Number of predictors", ylab = "MSE", xaxt = "n")
+axis(side = 1, at = seq(1, 17, 2), labels = seq(1, 17, 2))
+
+which(summary(forward)$which[7, -1])
+```
+
+Clearly, we can see the above 7 predictors (Private, Room/Board, Personal, PhD, Percentage Alumni, Expenditure, and Graduation Rate) are the predictors we found to be the most useful.
+
+b)
+```{r}
+library(gam)
+
+gam.fit = gam(Outstate ~ Private + s(Room.Board) + s(Personal) + s(PhD) + s(perc.alumni) + s(Expend) + s(Grad.Rate), data = College[train, ])
+
+par(mfrow = c(2, 3))
+plot(gam.fit, se = T, col = "blue")
+```
+
+Unfortunately, Private is a qualitative predictor, so we couldn't fit a smooth spline onto it, but we did so with the other 6 predictors which were quantitative. It doesn't look like any of the splines are too complex, as in they don't look like they overfit. All of the models look different from each other, which is a good indicator that they all have different relationships with out-of-state tuition, reducing concerns with collinearity.
+
+c)
+```{r}
+gam.pred = predict(gam.fit, College[test, ])
+gam.mse = mean((College[test, "Outstate"] - gam.pred)^2)
+gam.mse
+
+gam.tss = mean((College[test, "Outstate"] - mean(College[test, "Outstate"]))^2)
+test.rss = 1 - gam.mse / gam.tss
+test.rss
+```
+
+We can see the test MSE is lower than the training MSE, which shows the model performs better on the test set. As such, we don't have any concerns of overfitting. In addition, the correlation is about 0.8, so the model explains a good amount of variance in out-of-state tuition.
+
+d)
+```{r}
+summary(gam.fit)
+```
+
+From the above output, all the predictors are statistically significant, so we will assume all the predictors have a non-linear relationship with out-of-state tuition.
+
+### Question 6
+```{r}
+set.seed(1)
+
+newsData <- read.table("OnlineNewsPopularity.csv", header=TRUE, sep=",")
+train = sample(1:dim(newsData)[1], dim(newsData)[1]/2)
+test <-- train
+newsData.train = newsData[train, ]
+newsData.test = newsData[test, ]
+
+names(newsData)
+```
+
+After doing applied exercises 9 and 10 on our project, results were shown for polynomial regression, splines, and GAMs. I did some prior investigative work (i.e. pairs with shares and each predictor variable), but decided not to show most of those plots since they all look fairly similar to the first plot with shares vs. num_videos, and there are 58 plots that look very similar to that; it'd be a waste of computational resources to make the rest of the plots if there aren't any significantly strong linear or polynomial relationships. As a note, R would not allow me to use all 59 predictors in our dataset because it "cannot allocate a vector of size 11.7 Gb", so I only picked a couple predictors we found useful in LASSO and previous investigations as a group to create a formula for these problems.
+
+```{r}
+# Some basic polynomial regression test with a 5-th degree polynomial on num_videos
+attach(newsData)
+poly.fit = glm(shares ~ poly(num_videos, 5), data = newsData)
+summary(poly.fit)
+
+plot(newsData[, c('num_videos', 'shares')])
+pred = predict(poly.fit, data.frame(dis=seq(min(num_videos), max(num_videos), length.out = length(num_videos))))
+
+cat(length(pred))
+
+lines(seq(min(num_videos), max(num_videos), length.out = length(num_videos)), pred, col = "red")
+```
+
+```{r}
+library(boot)
+library(ISLR)
+library(leaps)
+library(gam)
+set.seed(1)
+
+# Polynomial regression without cross-validation
+x = seq(min(num_videos), max(num_videos), length.out = 100)
+cols = rainbow(15)
+plot(newsData[, c('num_videos', 'shares')])
+rss = c()
+
+for(pwr in 1:15){
+  poly.fit = glm(shares ~ poly(num_videos, pwr), data = newsData)
+  pred = predict(poly.fit, data.frame(num_videos = x))
+  lines(x, pred, col = cols[pwr])
+  
+  rss = c(rss, sum(poly.fit$residuals^2))
+}
+
+legend(x = 'topright', legend = 1:15, col = cols, lty = c(1, 1), lwd = c(2, 2))
+
+plot(rss, xlab = "Degree of the polynomial", ylab = "RSS", type = "l")
+
+# Polynomial regression with cross-validation
+poly.mse = c()
+for(degree in 1:7){
+  poly.fit = glm(shares ~ poly(num_videos, degree, raw = T) + poly(LDA_03, degree, raw = T) + poly(is_weekend, degree, raw = T) + poly(num_keywords, degree, raw = T) + poly(self_reference_max_shares, degree, raw = T) + poly(kw_max_avg, degree, raw = T) + poly(num_keywords, degree, raw = T) + poly(title_sentiment_polarity, degree, raw = T) + poly(n_non_stop_words, degree, raw = T) + poly(num_imgs, degree, raw = T) + poly(rate_positive_words, degree, raw = T), data = newsData)
+  mse = cv.glm(poly.fit, data = newsData, K = 10)$delta[1]
+  poly.mse = c(poly.mse, mse)
+}
+
+plot(poly.mse, type = "l", xlab = "Degree of the polynomial", ylab = "Cross-validation MSE")
+points(which.min(poly.mse), poly.mse[which.min(poly.mse)], col = "red", pch = 20, cex = 2)
+
+# Splines without cross-validation and with RSS
+df = 4
+spline.fit = lm(shares ~ bs(num_videos, df = df), data = newsData)
+x = seq(min(newsData[, "num_videos"]), max(newsData[, "num_videos"]), length.out = 100)
+y = predict(spline.fit, data.frame(num_videos = x))
+x = seq(min(newsData[, "num_videos"]), max(newsData[, "num_videos"]), length.out = 100)
+
+rss = c()
+for(df in 3:10){
+  spline.fit = lm(shares ~ bs(num_videos, df = df), data = newsData)
+  y = predict(spline.fit, data.frame(num_videos = x))
+  lines(x, y, col = cols[df])
+  
+  rss = c(rss, sum(spline.fit$residuals^2))
+}
+
+legend(x = "topright", legend = 3:10, text.col = cols[3:10], text.width = 0.5, bty = "n", horiz = T)
+
+plot(3:10, rss, xlab = "Degrees of freedom", ylab = "Train RSS", type = "l")
+
+# Splines with cross-validation and with MSE
+set.seed(1)
+spline.mse = c()
+
+# + LDA_03 + is_weekend + num_keywords + self_reference_max_shares + kw_max_avg + num_keywords + title_sentiment_polarity + n_non_stop_words + num_imgs + rate_positive_words
+for(df in 3:10){
+  newsData.model = model.frame(shares ~ bs(num_videos, df = df), data = newsData)
+  names(newsData.model) = c("shares", "bs.num_videos")
+  
+  spline.fit = glm(shares ~ bs.num_videos, data = newsData.model)
+  mse = cv.glm(spline.fit, data = newsData.model, K = 10)$delta[1]
+  spline.mse = c(spline.mse, mse)
+}
+
+plot(3:10, spline.mse, type = "l", xlab = "Degrees of freedom", ylab = "Cross-validation Spline MSE")
+
+x = which.min(spline.mse)
+points(x + 2, spline.mse[x], col = "red", pch = 20, cex = 2)
+
+train = sample(1:nrow(newsData), 35000)
+test = -train
+
+forward = regsubsets(shares ~ LDA_03 + is_weekend + num_keywords + self_reference_max_shares + kw_max_avg + num_keywords + title_sentiment_polarity + n_non_stop_words + num_imgs + rate_positive_words, data = newsData[train,], method = "forward", nvmax = 60)
+
+which(summary(forward)$which[9, -1])
+
+plot(1 / nrow(newsData) * summary(forward)$rss, type = "l", xlab = "Number of predictors", ylab = "MSE", xaxt = "n")
+axis(side = 1, at = seq(1, 60, 2), labels = seq(1, 60, 2))
+```
+
+As we can see in the second graph, polynomial regression was tested with varying degrees. In the end, the polynomial with degree 14 produced the best RSS, but the degree 10 polynomial is better overall because it has nearly identical RSS while having a decent amount less model complexity. As such, polynomial regression results in a model with RSS of 5.34e+12.
+
+Next, polynomial regression was tested with eleven variables, such as num_videos, LDA_03, is_weekend, num_keywords, and more. Some of these variables were chosen from our previous team LASSO discussions, while others were chosen for common sense of what would make most sense, and some were chosen for their correlation with the number of article shares. In the end, with eleven variables, the polynomial with degree 1 had the lowest cross-validation MSE by far compared to the higher degrees. Therefore, we can conclude this polynomial is probably best compared to other methods I have explored.
+
+Finally, it is also important to note, polynomial regression was tested with a lot fewer variables, even though it wasn't shown in the above results. Three variables, num_videos and LDA_03, were used in comparison to the current 11. The results were actually surprisingly different. I found that the cross-validation MSE stays fairly constant as the degree of the polynomial increases, until it reaches degree 6. The degree 5 polynomial has the lowest MSE, but a polynomial with degree 2 produces similar MSE with significantly lower model complexity. As a result, the three polynomial regression tests produce differing degrees of a polynomial, some high and some low. I think it would be better to use the degree 1 polynomial for two reasons. First, we used cross-validation to reduce variance of results in error. Also, the polynomial is less complex, so more statistical inference can be done. Although progress has been made in this area, results could be somewhat specific to the features I chose. In the above examples, I used num_videos as the lone feature for initial polynomial regression, but I also used LDA_03 and kw_max_avg for the same test and they produced similar results so I figured it's probably safe to assume these results are standard across the dataset. Then, I used two variables for multiple polynomial regression, as well as eleven variables, so tests were pretty extensive. It would simply take me too long and it would be too annoying to create the graphs for all 59 predictors.
+
+Next, splines were tested. In the fifth plot, the model with 6 degrees of freedom produced the lowest cross-validation MSE. As such, 6 d.f. produces an even balance between being too complex and being too simple. The resulting MSE is 1.348e+8.
+
+Finally, with forward selection, we found all 9 tested predictors as being useful.
+
+```{r}
+# GAMs
+gam.fit = gam(shares ~ LDA_03 + is_weekend + num_keywords + self_reference_max_shares + kw_max_avg + num_keywords + title_sentiment_polarity + n_non_stop_words + num_imgs + rate_positive_words, data = newsData[train, ])
+
+par(mfrow = c(2, 3))
+plot(gam.fit, se = T, col = "blue")
+
+gam.pred = predict(gam.fit, College[test, ])
+gam.mse = mean((newsData[test, "shares"] - gam.pred)^2)
+gam.mse
+
+gam.tss = mean((newsData[test, "shares"] - mean(College[test, "shares"]))^2)
+test.rss = 1 - gam.mse / gam.tss
+test.rss
+
+summary(gam.fit)
+```
+
+With the GAMs, we don't have any notable results across all 9 predictors. As mentioned earlier in this exercise, most of these graphs have a very weak correlation with number of article shares. We can clearly see from the model that n_non_stop_words is not significant, as well as title_sentiment_polarity, and rate_positive_words. Therefore, if we removed these three predictors, we would have a reduced model with 6 predictors, similar to the polynomial test earlier where we found degree 5 polynomials working with a large number of predictors or the spline determing 6 d.f. being the best model. I don't think I agree with continuing with the use of a GAM since it only marginally reduces model complexity. For future statistical inference, if we want to figure out which variables can potentially be important in predicting future improvements for a given news article, we want to stay on the conservative side and include variables even if we have an inkling of them being useful, such as with the degree 10 polynomial or 9 predictors found in forward selection.
+
+```{r}
+# Cp, BIC, Adjusted R2 measurements
+train <- sample(length(self_reference_max_shares), length(self_reference_max_shares) - (length(self_reference_max_shares) / 3))
+test <- -train
+newsData.train <- newsData[train, ]
+newsData.test <- newsData[test, ]
+
+fit <- regsubsets(shares ~ LDA_03 + is_weekend + num_keywords + self_reference_max_shares + kw_max_avg + num_keywords + title_sentiment_polarity + n_non_stop_words + num_imgs + rate_positive_words, data = newsData.train, nvmax = 60, method = "forward")
+fit.summary <- summary(fit)
+par(mfrow = c(1, 3))
+plot(fit.summary$cp, xlab = "Number of variables", ylab = "Cp", type = "l")
+
+min.cp <- min(fit.summary$cp)
+std.cp <- sd(fit.summary$cp)
+abline(h = min.cp + 0.2 * std.cp, col = "green", lty = 2)
+abline(h = min.cp - 0.2 * std.cp, col = "green", lty = 2)
+plot(fit.summary$bic, xlab = "Number of variables", ylab = "BIC", type='l')
+
+min.bic <- min(fit.summary$bic)
+std.bic <- sd(fit.summary$bic)
+abline(h = min.bic + 0.2 * std.bic, col = "green", lty = 2)
+abline(h = min.bic - 0.2 * std.bic, col = "green", lty = 2)
+plot(fit.summary$adjr2, xlab = "Number of variables", ylab = "Adjusted R2", type = "l", ylim = c(0.4, 0.84))
+
+max.adjr2 <- max(fit.summary$adjr2)
+std.adjr2 <- sd(fit.summary$adjr2)
+abline(h = max.adjr2 + 0.2 * std.adjr2, col = "green", lty = 2)
+abline(h = max.adjr2 - 0.2 * std.adjr2, col = "green", lty = 2)
+```
+
+In general, these results don't differ significantly from previous homework problems and tests. In previous investigations, LASSO found four useful features, such as rate_positive_polarity and num_images, which were both used in the above models with splines, GAMs and polynomial regression. As such, there are not any revelations in these results and we don't have an amazing MSE or RSS in any of the models, which is to be expected since none of the relationships between predictors and the response are directly linear or polynomial in nature. As such, it is extremely difficult to model this problem. With that being said, the model with 10 or so predictors provides for a lot of flexibility while also provind significant predictors and possible improvements for RSS/MSE. After evaluating BIC, $C_p$, and $R^2$, we can say somewhere around 5 or 6 variables produces the best values. As such, somewhere between the range of 6-9 predictors produces good results in terms of MSE, RSS, BIC, and across different models.
+
+In the future, since we have a good estimate of the number of predictors that produces good error rates, I plan to do a bit more feature selection since we can now choose somewhere around a couple million different models rather than $59^{59}$ different models, and that number can be reduced even further since we have recognized useful variables with LASSO and forward selection. As such, this investigative work with applied exercises 9 and 10 haven't produced substantially better models, but have provided useful insights into how many predictors are appropriate to solve our problem and optimize for both error and model complexity, which turns out to be around 6 predictors. This remaining feature selection will be a point of future investigation for both me and our team in the remaining weeks.

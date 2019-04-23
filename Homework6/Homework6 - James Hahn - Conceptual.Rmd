@@ -1,0 +1,13 @@
+---
+title: "Statistical Learning - Homework 6 (Conceptual)"
+author: James Hahn
+output: pdf_document
+---
+
+### Chapter 7 - Exercise 5
+
+a) $\hat{g}_2$ will have a smaller training RSS since the model has more degrees of freedom, thus producing a more flexible model.
+
+b) $\hat{g}_1$ will probably have a smaller test RSS since $\hat{g}_2$ might overfit due to its high flexibility.
+
+c) They'll have the same training and test RSS since $\lambda$ will be so small that both $\hat{g}_1$ and $\hat{g}_2$ will be nearly identical.

@@ -1,0 +1,115 @@
+---
+title: "Statistical Learning - Project Update"
+author: "James Hahn"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+### Question 8
+```{r}
+library(class)
+library(MASS)
+library(stats)
+library(cvTools)
+library(rfUtilities)
+library(bootstrap)
+
+set.seed(1)
+
+# Reading data and preprocessing
+newsDataOriginal <- read.table("OnlineNewsPopularity.csv", header=TRUE, sep=",")
+newsDataOriginal$shares = as.numeric(newsDataOriginal$shares)
+sharesIqr <- IQR(newsDataOriginal$shares)
+shares75Quant <- quantile(newsDataOriginal$shares, 0.75)
+shares25Quant <- quantile(newsDataOriginal$shares, 0.25)
+newsData <- newsDataOriginal[newsDataOriginal$shares < (1.5*sharesIqr + shares75Quant) & newsDataOriginal$shares > (shares25Quant - 1.5*sharesIqr), ] # outliers removed
+newsDataQuant <- newsData[, sapply(newsData, class) == "numeric"]
+newsDataQuant <- newsDataQuant[sample(nrow(newsDataQuant)),] # randomly shuffle the data
+
+# Process binarized and trinarized datasets
+newsDataBinary <- data.frame(newsDataQuant) # make a copy
+newsDataBinary$shares <- ifelse(newsDataBinary$shares > quantile(newsDataBinary$shares, 0.5), 1, 0)
+newsDataTrinary <- data.frame(newsDataQuant) # make a copy
+newsDataTrinary$shares <- ifelse(newsDataTrinary$shares > quantile(newsDataTrinary$shares, 0.333), ifelse(newsDataTrinary$shares > quantile(newsDataTrinary$shares, 0.667), 1, 0), -1) # convert labels to -1, 0, and 1 for the with 1/3 and 2/3 quantiles as threshold barriers
+
+# Set the dataset used for all classification problems
+newsClassif <- newsDataTrinary # current classification set we're using
+
+# Create training and testing sets
+trainIndex <- sample(1:nrow(newsClassif), 0.8*nrow(newsClassif)) # train indices
+testIndex <- setdiff(1:nrow(newsClassif), trainIndex) # test indices
+train <- newsClassif[trainIndex,]
+test <- newsClassif[testIndex,]
+trainQuant <- newsDataQuant[trainIndex,]
+testQuant <- newsDataQuant[testIndex,]
+trainX <- newsClassif[trainIndex, -61]
+trainY <- newsClassif[trainIndex, "shares"]
+testX <- as.data.frame(newsClassif[testIndex, -61])
+testY <- as.data.frame(newsClassif[testIndex, "shares"])
+testYQuant <- as.data.frame(newsDataQuant[testIndex, "shares"])
+
+# QDA model discussed in Homework 3
+newsQda <- qda(shares ~ data_channel_is_entertainment + data_channel_is_socmed + data_channel_is_world + kw_avg_avg + LDA_02 + weekday_is_saturday:is_weekend, data = train)
+summary(newsQda)
+qdaPred <- predict(newsQda, test)
+correct = 0
+for(j in 1:length(qdaPred$class)){
+  if(qdaPred$class[j] == test$shares[j] && j < length(qdaPred$class) && j < length(test$shares)){
+    correct <- correct + 1
+  }
+}
+acc_sum <- (correct/length(qdaPred$class))
+cat("QDA accuracy: ", acc_sum)
+
+acc_sum = 0
+# train t he model
+# data_channel_is_entertainment + data_channel_is_socmed + data_channel_is_world + kw_avg_avg + LDA_02 + weekday_is_saturday:is_weekend
+newsKnn <- DMwR::kNN(shares ~ n_non_stop_words + num_videos + rate_positive_words + min_positive_polarity + max_positive_polarity, train, test, k = 101) # train a KNN on this fold
+newsKnn <- as.numeric(newsKnn)-1 # transform outputs from 1 & 2 to 0 & 1
+
+# compute accuracy
+correct = 0
+for(j in 1:length(newsKnn)){
+  if(newsKnn[j] == test$shares[j] && j < length(newsKnn) && j < length(test$shares)){
+    correct <- correct + 1
+  }
+}
+acc_sum <- acc_sum + (correct/length(newsKnn))
+cat("kNN accuracy: ", acc_sum)
+
+# statistics
+avgShares <- function(x){mean(x)}
+sharesBoot <- bootstrap(newsDataQuant$shares, 1000, avgShares)
+avgSharesEstimate <- mean(newsDataQuant$shares)
+avgSharesBaggedEstimate <- mean(sharesBoot$thetastar)
+sharesLowerCI <- quantile(newsDataQuant$shares, 0.025)
+sharesUpperCI <- quantile(newsDataQuant$shares, 0.975)
+sharesBootLowerCI <- quantile(sharesBoot$thetastar, 0.025)
+sharesBootUpperCI <- quantile(sharesBoot$thetastar, 0.975)
+
+# bootstrapping and bagging
+hist(sharesBoot$thetastar, main="Bootstrapped distribution of mean shares", xlab="Average shares estimate")
+abline(v=avgSharesBaggedEstimate, col="red")
+abline(v=sharesBootLowerCI, col="blue")
+abline(v=sharesBootUpperCI, col="blue")
+hist(newsDataQuant$shares, main="Real distribution of shares", xlab="Shares estimates")
+abline(v=avgSharesEstimate, col="red")
+abline(v=sharesLowerCI, col="blue")
+abline(v=sharesUpperCI, col="blue")
+```
+
+It's easy to see why cross-validation would be effective and easy to implement for this project. We can use cross-validation for the trained classifiers (kNN, logistic regression, LDA, QDA, and linear regression) to reduce variance in accuracies (this is a pretty obvious result of cross-validation and taking the mean of the k folds' accuracies), which is useful since a classifier can be unlucky for a particular seed and produce sub-par accuracy or get lucky lucky for another seed and produce a spectacularly high accuracy. Cross-validation with k = 5 or k = 10 would make good use of the 40k samples of the training set to average the accuracy or RSS and produce an accurate 'final' summarization of how a given classifier fits to the dataset and can even dictate the best version of a model (i.e. value of k for kNN). However, even with that being said, cross-validation isn't immensely useful in our dataset, considering the small-ish number of features compared to the number of samples. In fact, ISLR agrees with this point by stating, ``In the absence of a very large designated test set that can be used to directly estimate the test error rate, ... [cross-validation] estimates the test error rate ...". In our case, we have a large designated test set, so cross-validation isn't expected to produce substantial results. Finally, out of all cross-validation variations, LOOCV is the most useless since we have a large training and test set and LOOCV is designed for datasets with an extremely small test set or not enough samples for a test set.
+
+Permutation tests don't have as much applicability in this project. We can make use of statistical inference to reason about the number of shares for a given article, but we're not hypothesizing about a specific value for a given feature. Moreso, we're not even interested in hypothesizing about each feature of the dataset. If anything, we would only be interested in the response, which is the number of shares for an article. Perhaps, if anything, we could use permutation tests to hypothesize about the coefficients for features in the linear regression model. Or, we could train each classifier and investigate whether the accuracy/error is statistically significant, checking if the model is useful compared to others. However, this is more for an 'experiment', rather than for practical purposes, since we're already using 4 different classifiers, meaning it's not really vital to the process.
+
+Bootstrapping has limited application, similar to permutation tests. One practical application is it could help find confidence intervals for the predicted shares of an article. So, instead of giving one precise prediction, which could have a value in the area of hundreds or thousands, we output a 95% confidence interval to a customer, telling them where we estimate the article to lie in terms of number of shares.
+
+Resampling (bootstrapping, cross-validation) in general isn't necessary for our dataset, but has a few practical uses worth testing. This is easily understood since the dataset has 40k samples over mearly 59 predictors. Moreso, the predictors do not have wide ranges. In fact, 24 of the 59 predictors are binary features. Resampling to estimate the value of a binary feature is almost completely useless. The beauty of bootstrapping, and specifically bagging, is to utilize a small sample size to estimate the value of a statistic. I strongly believe 40k samples is enough to estimate any given feature without bagging.
+
+In general, I trust the models built with tools from Chapters 3 and 4 a lot. I tested kNN with several different values of k, so I know how well the model performs for small, medium, and large values of k. Also, the dataset, as previously mentioned several times, is large. Therefore, this reduces risk of underfitting significantly and I believe the models aren't as prone to overfitting due to only marginally better testing and training error (due to dimensionality of the dataset). 
+
+After some analysis, it was found with 10-fold cross-validation that the accuracy of knn was 63.74\% for 101-nearest-neighbors, which essentially exactly matches the 63\% binary accuracy achieved without cross-validation in homework 3. Additionally, we reach a 61.95\% accuracy with 11-nearest-neighbors and 63.24\% on 401-nearest-neighbors. As such, cross-validation is going to be of no use for us and we can reasonably conclude a value of k=101 for kNN is the best parameter for the model, which is the predicted best parameter value from homework 3. I believe, even if there is just a 2% increase in accuracy, despite the higher model complexity, k=101 is better than k-11. To summarize, in a roundabout way, one can even simulate cross-validation by using a different seed in different simulations and taking the average of the accuracies, which is what I did in homework 3 anyway. As such, naturally, formally implementing k-fold cross-validation is not going to help our model. That's one sampling method that's not going to help us too much, mostly due to our already large dataset. I will not even attempt to replicate k-fold cross-validation with the other models, since it doesn't make sense practically or theoretically and it would be a waste of resources and time. As an additional test, I ran 10-fold cross-validation on our regression problem with multiple linear regression and the same model as used in Homework 3. The estimated MSE is 1,128,384 which means each residual is off by about $\sqrt{1128384} = 1062.254$ shares. As such, the model doesn't seem to do the best, but performs similarly to our model in Homework 3. As such, cross-validation isn't entirely useful in both the regression and classification problems.
+
+To test out bootstrapping with our predictor, shares, the two above histograms were created. The first histogram displays the bootstrapped distribution of the number of shares for an article. This distribution is roughly Normal with a bagged estimate (mean) of 1672 shares. The true distribution of shares across the entire dataset is heavily right-skewed, but still has a mean of 1672 shares. As such, the distributions may look different, but their means are exactly the same. This was to be expected due to the large number of samples in the dataset. These mentioned estimates are both shown as red vertical lines in their distributions. Alongside these estimates, the 95% confidence intervals of the distributions were computed and shown in blue. For the bootstrapped distribution, the CI is [1660, 1684]. For the true distribution, the CI is [475, 4800]. As such, although there is not a significant difference in the means of the distributions, the confidence intervals for the estimates have a vast difference. If we were to set up a permutation test for this situation, it would have the following hypotheses: $H_o: \theta = 0$ vs. $H_a: \theta \neq 0$, where $\theta$ is the mean number of shares. Since 0 is clearly in neither of these CIs, we can reject the null and conclude the average number of shares is significantly higher than 0. We can also set up another permutation test to check whether our sample estimated number of shares is significantly different from 1600. The hypotheses are as follows: $H_o: \hat{\theta} = 1600$ vs. $H_a: \hat{\theta} \neq 1600$. However, since 1600 is in both of the CIs, we fail to reject $H_o$ and conclude the average number of shares is not significantly different from 1600. 
+

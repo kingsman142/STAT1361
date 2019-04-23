@@ -1,0 +1,37 @@
+---
+title: "Statistical Learning - Homework 5 (Conceptual)"
+author: James Hahn
+output: pdf_document
+---
+
+### Chapter 6 - Exercise 2
+
+a) The lass, relative to least squares, is \textbf{less flexible and hence will give improved prediction accuracy when its increase in bias is less than its decrease in variance}.
+
+b) The ridge regression, relative to least squares, is \textbf{less flexible and hence will give improved prediction accuracy when its increase in bias is less than its decrease in variance}.
+
+c) The non-linear methods, relative to least squares, is \textbf{more flexible and hence will give improved prediction accuracy when its increase in variance is less than its decrease in bias}.
+
+### Chapter 6 - Exercise 3
+
+a) As we increase s from 0, the training RSS will \textbf{steadily decrease, since increasing s leads to restricting the coefficients to a lesser extent, and hence making the model more flexible}.
+
+b) As we increase s from 0, the test RSS will \textbf{decrease initially, and then eventually start increasing in a U shape since the model becomes more flexible and then overestimates/overfits due to extra parameters being involved}.
+
+c) As we increase s from 0, the variance will \textbf{steadily increase because a more flexible model results in higher variance}.
+
+d) As we increase s from 0, the squared bias will \textbf{steadily decrease since the model variance will increase and as variance increases, bias decreases due to the bias-variance tradeoff}.
+
+e) As we increase s from 0, the irreducible error will \textbf{remain constant because the definition of irreducible error means it will remain independent of the chosen model; it's just some small offset showing us that the model isn't the true model}.
+
+### Chapter 6 - Exercise 4
+
+a) As we increase $\lambda$ from 0, the training RSS will \textbf{steadily increase since the model becomes more flexible as $\lambda$ increases, naturally leading to a higher RSS}.
+
+b) As we increase $\lambda$ from 0, the test RSS will \textbf{decrease initially, and then eventually start increasing in a U shape because the model becomes more flexible, leading to more overestimation/overfitting due to extra parameters being involved}.
+
+c) As we increase $\lambda$ from 0, the variance will \textbf{steadily decrease because the model is becoming less flexible since the coefficients are being restricted more and more, leading to lower variance}.
+
+d) As we increase $\lambda$ from 0, the squared bias RSS will \textbf{steadily increase because we will be restricting the coefficients to smaller and smaller values, thus the model will become more flexible, leading to higher bias, due to the bias-variance tradeoff}.
+
+e) As we increase $\lambda$ from 0, the irreducible error will \textbf{remains constant since the definition of irreducible error means it will be independent of the chosen model}.

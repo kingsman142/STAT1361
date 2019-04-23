@@ -1,0 +1,273 @@
+---
+title: "Statistical Learning - Homework 5 (Applied)"
+author: "James Hahn"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+### Question 6 - Exercise 9
+
+a) 
+```{r}
+library(ISLR)
+data(College)
+set.seed(1)
+train = sample(1:dim(College)[1], dim(College)[1]/2)
+test <-- train
+College.train = College[train, ]
+College.test = College[test, ]
+```
+
+b)
+```{r}
+fit.lm = lm(Apps ~ ., data = College.train)
+pred.lm = predict(fit.lm, College.test)
+mse <- mean((pred.lm - College.test$Apps)^2)
+
+cat(mse)
+```
+
+The test MSE is 1108531.
+
+c)
+```{r}
+library(glmnet)
+
+train.mat = model.matrix(Apps ~ ., data = College.train)
+test.mat = model.matrix(Apps ~ ., data = College.test)
+grid = 10^seq(4, -2, length=100)
+fit.ridge = glmnet(train.mat, College.train$Apps, alpha = 0, lambda = grid, thresh = 1e-12)
+cv.ridge = cv.glmnet(train.mat, College.train$Apps, alpha = 0, lambda = grid, thresh = 1e-12)
+bestlam.ridge = cv.ridge$lambda.min
+bestlam.ridge
+pred.ridge <- predict(fit.ridge, s = bestlam.ridge, newx = test.mat)
+mean((pred.ridge - College.test$Apps)^2)
+
+cat(bestlam.ridge)
+```
+
+The test error here is 1108512, which is roughly the same as least squares.
+
+d)
+```{r}
+fit.lasso = glmnet(train.mat, College.train$Apps, alpha = 1, lambda = grid, thresh = 1e-12)
+cv.lasso = cv.glmnet(train.mat, College.train$Apps, alpha = 1, lambda = grid, thresh = 1e-12)
+bestlam.lasso = cv.lasso$lambda.min
+bestlam.lasso
+pred.lasso = predict(fit.lasso, s = bestlam.lasso, newx = test.mat)
+lasso.mse <- mean((pred.lasso - College.test$Apps)^2)
+pred.lasso <- predict(fit.lasso, s = bestlam.lasso, type = "coefficients")
+pred.lasso
+
+pred.lasso <- predict(fit.lasso, s = bestlam.lasso, newx = test.mat)
+mean((pred.lasso - College.test$Apps)^2)
+
+cat(lasso.mse)
+```
+
+The test error is 1038776, which is slight lower than least squares and ridge regression, and the number of non-zero coefficients is 15.
+
+e)
+```{r}
+library(analogue)
+library(pls)
+
+fit.pcr = pcr(Apps ~ ., data = College.train, scale = TRUE, validation = "CV")
+validationplot(fit.pcr, val.type = "MSEP")
+pred.pcr <- predict(fit.pcr, College.test, ncomp = 10)
+pcr.mse <- mean((pred.pcr - College.test$Apps)^2)
+
+cat(pcr.mse)
+summary(fit.pcr)
+```
+
+The test MSE is 1505718, which is a moderate amount higher than the other models observed so far. The best value of M found through cross-validation is 17.
+
+f)
+```{r}
+library(pls)
+
+fit.pls = plsr(Apps ~ ., data = College.train, scale = TRUE, validation = "CV")
+validationplot(fit.pls, val.type = "MSEP")
+pred.pls = predict(fit.pls, College.test, ncomp = 10)
+pls.mse <- mean((pred.pls - College.test$Apps)^2)
+
+cat(pls.mse)
+summary(fit.pls)
+```
+
+The test MSE is 1134531, which is on par with the other models. The best value of M found through cross-validation is 17, which is exactly what was discovered with PCR.
+
+g)
+```{r}
+test.avg = mean(College.test$Apps)
+lm.r2= 1 - mean((pred.lm - College.test$Apps)^2)/mean((test.avg-College.test$Apps)^2)
+ridge.r2 = 1 - mean((pred.ridge - College.test$Apps)^2)/mean((test.avg-College.test$Apps)^2)
+lasso.r2 = 1 - mean((pred.lasso - College.test$Apps)^2)/mean((test.avg-College.test$Apps)^2)
+pcr.r2 = 1 - mean((pred.pcr - College.test$Apps)^2)/mean((test.avg-College.test$Apps)^2)
+pls.r2 = 1 - mean((pred.pls - College.test$Apps)^2)/mean((test.avg-College.test$Apps)^2)
+
+cat(lm.r2)
+cat(ridge.r2)
+cat(lasso.r2)
+cat(pcr.r2)
+cat(pls.r2)
+```
+
+The above calculates the correlation for each of the models (lm, ridge, lasso, pcr, pls in that order) with the predictions. Clearly, PCR has the lowest correlation by far out of all the models, although it's decent at 0.8127. However, all four other models have an $r^2$ value around 0.9, so they can predict college applications pretty accurately. None of the errors were too terrible different from each other (except for PCR), so we can't really say it's the most accurate distinguishing factor of these models; all would work perfectly fine in general.
+
+# Chapter 6 - Exercise 10
+
+a)
+```{r}
+set.seed(1)
+x = matrix(rnorm(1000*20), 1000, 20)
+b = rnorm(20)
+b[3] = 0
+b[4] = 0
+b[9] = 0
+b[10] = 0
+b[19] = 0
+eps = rnorm(1000)
+y = x%*%b + eps
+```
+
+b)
+```{r}
+train = sample(seq(1000), 100, replace = FALSE)
+test <-- train
+x.train = x[train, ]
+x.test = x[test, ]
+y.train = y[train]
+y.test = y[test]
+```
+
+c)
+```{r}
+library(leaps)
+
+data.train = data.frame(y = y.train, x = x.train)
+regfit.full = regsubsets(y ~ ., data = data.train, nvmax = 20)
+train.mat = model.matrix(y ~ ., data = data.train, nvmax = 20)
+val.errors = rep(NA, 20)
+for(i in 1:20){
+  coefi = coef(regfit.full, id = i)
+  pred = train.mat[, names(coefi)]%*%coefi
+  val.errors[i] = mean((pred - y.train)^2)
+}
+plot(val.errors, xlab = "Number of predictors", ylab = "Training MSE", pch = 19, type = "b")
+```
+
+d)
+```{r}
+data.test = data.frame(y = y.test, x = x.test)
+test.mat = model.matrix(y ~ ., data = data.test, nvmax = 20)
+val.errors = rep(NA, 20)
+for(i in 1:20){
+  coefi = coef(regfit.full, id = i)
+  pred = test.mat[, names(coefi)]%*%coefi
+  val.errors[i] = mean((pred - y.test)^2)
+}
+plot(val.errors, xlab = "Number of predictors", ylab = "Test MSE", pch = 19, type = "b")
+```
+
+e)
+```{r}
+which.min(val.errors)
+```
+
+The model with the smallest test MSE is with 14 predictors. .
+
+f)
+```{r}
+coef(regfit.full, which.min(val.errors))
+```
+
+The true model for the sum of squares is minimized with the above coefficients. In part a), we generate the coefficients based on a normal distribution. If you observe the coefficient values of this model, we can see they're roughlyyyy normal-ish, so this model seems to be close to the true model. It's not terribly far off, but it's definitely not perfect.
+
+g)
+```{r}
+val.errors = rep(NA,20)
+x_cols = colnames(x,do.NULL = FALSE, prefix = 'x.')
+for(i in 1:20){ 
+    coefi = coef(regfit.full, id=i)
+    val.errors[i]= sqrt(sum((b[x_cols%in%names(coefi)]-coefi[names(coefi)%in%x_cols])^2) + sum(b[!(x_cols%in%names(coefi))])^2)
+}
+plot(val.errors, xlab = "Number of coefficients", ylab = "Error between estimated and true coefficients", pch = 19, type = "b")
+```
+
+Compared to the test MSE graph in part d), the graphs look significantly different. In fact, we can observe when the model has 3 or 7 coefficients, it's performing the most optimally. Regardless, once we reach a large number of coefficients (i.e. 15+), the error seems to level out and there begins to be no more additional benefit in making the model more complex (this appears in both charts). As such, it may be worth investigating a model with 4 or 7 coefficients/features since the graph in part d) generally indicates "more features is less test MSE". However, with that being said, after analyzing both charts, a model with 7 predictors proves to be a good tradeoff between model complexity, fit, and interpretability. It has the lowest error rate in this chart, and close to the smallest test MSE in the chart in part d).
+
+### Question 6
+```{r}
+library(glmnet)
+library(analogue)
+library(pls)
+set.seed(1)
+
+newsData <- read.table("OnlineNewsPopularity.csv", header=TRUE, sep=",")
+train = sample(1:dim(newsData)[1], dim(newsData)[1]/2)
+test <-- train
+newsData.train = newsData[train, ]
+newsData.test = newsData[test, ]
+
+fit.lm = lm(shares ~ data_channel_is_entertainment + data_channel_is_socmed + data_channel_is_world +  + kw_avg_max + kw_avg_min + kw_avg_avg + LDA_02 + average_token_length + num_keywords + title_sentiment_polarity + weekday_is_saturday:is_weekend, data = newsData.train)
+pred.lm = predict(fit.lm, newsData.test)
+mse <- mean((pred.lm - newsData.test$shares)^2)
+cat(mse)
+
+train.mat = model.matrix(shares ~ data_channel_is_entertainment + data_channel_is_socmed + data_channel_is_world + kw_avg_avg + LDA_02 + weekday_is_saturday:is_weekend, data = newsData.train)
+test.mat = model.matrix(shares ~ data_channel_is_entertainment + data_channel_is_socmed + data_channel_is_world + kw_avg_avg + LDA_02 + weekday_is_saturday:is_weekend, data = newsData.test)
+grid = 10^seq(4, -2, length=100)
+fit.ridge = glmnet(train.mat, newsData.train$shares, alpha = 0, lambda = grid, thresh = 1e-12)
+cv.ridge = cv.glmnet(train.mat, newsData.train$shares, alpha = 0, lambda = grid, thresh = 1e-12)
+bestlam.ridge = cv.ridge$lambda.min
+bestlam.ridge
+pred.ridge = predict(fit.ridge,s=bestlam.ridge,newx = test.mat)
+cat(bestlam.ridge)
+
+fit.lasso = glmnet(train.mat, newsData.train$shares, alpha = 1, lambda = grid, thresh = 1e-12)
+cv.lasso = cv.glmnet(train.mat, newsData.train$shares, alpha = 1, lambda = grid, thresh = 1e-12)
+bestlam.lasso = cv.lasso$lambda.min
+bestlam.lasso
+pred.lasso = predict(fit.lasso, s = bestlam.lasso, newx = test.mat)
+lasso.mse <- mean((pred.lasso - newsData.test$shares)^2)
+cat(lasso.mse)
+pred.lasso
+
+fit.pcr = pcr(shares ~ data_channel_is_entertainment + data_channel_is_socmed + data_channel_is_world + kw_avg_avg + LDA_02 + weekday_is_saturday:is_weekend, data = newsData.train, scale = TRUE, validation = "CV")
+validationplot(fit.pcr, val.type = "MSEP")
+pred.pcr <- predict(fit.pcr, newsData.test, ncomp = 5)
+pcr.mse <- mean((pred.pcr - newsData.test$shares)^2)
+cat(pcr.mse)
+summary(fit.pcr)
+
+library(pls)
+fit.pls = plsr(shares ~ data_channel_is_entertainment + data_channel_is_socmed + data_channel_is_world + kw_avg_avg + LDA_02 + weekday_is_saturday:is_weekend, data = newsData.train, scale = TRUE, validation = "CV")
+validationplot(fit.pls, val.type = "MSEP")
+pred.pls = predict(fit.pls, newsData.test, ncomp = 5)
+pls.mse <- mean((pred.pls - newsData.test$shares)^2)
+cat(pls.mse)
+summary(fit.pls)
+
+test.avg = mean(newsData.test$shares)
+lm.r2= 1 - mean((pred.lm - newsData.test$shares)^2)/mean((test.avg-newsData.test$shares)^2)
+ridge.r2 = 1 - mean((pred.ridge - newsData.test$shares)^2)/mean((test.avg-newsData.test$shares)^2)
+lasso.r2 = 1 - mean((pred.lasso - newsData.test$shares)^2)/mean((test.avg-newsData.test$shares)^2)
+pcr.r2 = 1 - mean((pred.pcr - newsData.test$shares)^2)/mean((test.avg-newsData.test$shares)^2)
+pls.r2 = 1 - mean((pred.pls - newsData.test$shares)^2)/mean((test.avg-newsData.test$shares)^2)
+cat(lm.r2)
+cat(ridge.r2)
+cat(lasso.r2)
+cat(pcr.r2)
+cat(pls.r2)
+```
+
+In general, all the models have terrible correlation, while all having roughly the same (i.e. 0.0164). Therefore, none of the models are really superior to each other. In addition, the error rates are all basically the same, around 123 million MSE. The models we're currently using are very meh, but there are so many different combinations of variables wer could use and explore, which we plan to do over Spring break. Some variables may be significant individually, but don't show to be significant with other predictors, or vice versa. Therefore, it's hard to gauge whether we deem our models acceptable or not. They may be the best things we'll get out of all the approachs we attempt. Therefore, even though there are a few good models that we've attained thus far, we can't assume they're the best models, but it also isn't a fair assessment to say they're terrible models either since every approach attempted so far has kept them in the ruling to be a good, or at least acceptable, model.
+
+### Question 7
+
+Yes, we have all been getting similar results for the different classifiers. Most of us have tried all 3 classification algorithms (LDA, QDA, KNN) and then linear regression. No groundbreaking accuracies were achieved, as the other group members are getting round 60% accuracy for the classification task. We didn't compare the MSE for the linear regression, but we decided it was best to use only a subset of the features, rather than all features at once. Some of us included highly correlated features and interaction terms, while others used intuition to find the features that made the most sense for a regression model.
+
+In general, we concluded this task is very difficult. We agree it's both a classification and regression task, but differ on how we split the data into different classes for the classification task (i.e. we can use quantiles or standard deviations from the mean). In terms of models, linear regression with 4 or 5 terms has been working the best and provides the most inference, but we don't completely agree on which features we want to use at the moment. LDA and QDA are nearly useless for us, but KNN and logistic regression have been somewhat interpretable and tolerable. As such, if we had the option, we would just continue with those 3, but we can explore a bit more with LDA and QDA now that we have many more tools since then.

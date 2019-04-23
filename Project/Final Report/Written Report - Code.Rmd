@@ -1,0 +1,465 @@
+---
+title: "Statistical Learning - Homework 3 (Applied)"
+author: James Hahn
+output: pdf_document
+---
+
+```{r}
+# DATA READING, PREPROCESSING, BASIC STATISTICS, OUTLIER DETECTION
+
+library(DMwR)
+library(class)
+library(MASS)
+library(stats)
+
+newsDataOriginal <- read.table("OnlineNewsPopularity.csv", header=TRUE, sep=",")
+newsDataOriginal$shares = as.numeric(newsDataOriginal$shares)
+newsDataOriginal = newsDataOriginal[sample(1:nrow(newsDataOriginal)), ]
+names(newsDataOriginal)
+summary(newsDataOriginal)
+summary(newsDataOriginal$shares)
+newsDataLen <- nrow(newsDataOriginal)
+shares_bins <- cut(newsDataOriginal$shares, 50, include.lowest=TRUE)
+plot(shares_bins)
+
+sharesIqr <- IQR(newsDataOriginal$shares)
+shares75Quant <- quantile(newsDataOriginal$shares, 0.75)
+shares25Quant <- quantile(newsDataOriginal$shares, 0.25)
+newsData <- newsDataOriginal[newsDataOriginal$shares < (1.5*sharesIqr + shares75Quant) & newsDataOriginal$shares > (shares25Quant - 1.5*sharesIqr), ] # outliers removed
+summary(newsData$shares)
+numOutliers <- (newsDataLen - nrow(newsData))
+
+shares_bins <- cut(newsData$shares, 50, include.lowest=TRUE)
+plot(shares_bins) # plot the shares distribution AFTER outlier removal so it isn't as skewed
+plot(newsData$kw_max_avg, newsData$shares)
+
+newsDataQuant <- newsData[, sapply(newsData, class) == "numeric"]
+names(newsDataQuant)
+
+cor(as.matrix(newsData[, 61]), as.matrix(newsData[,-1])) # correlations with 'shares' and every other variable
+```
+
+
+Refer to above code. The above code does a lot of work. I have done some preprocessing on the data. For example, I plotted the original news data with 20 histogram bins and immediately realized the distribution was significantly skewed to the right. I concluded there were definitely outliers in the data, so I went into further analysis. I did a summary of the shares data, which is the target/predicted label, and saw the first quartile was at 946 shares, third quartile was at 2800 shares, and then the min and max were 1 and 843,300 respectively. Therefore, with an IQR of 1854, I calculated outliers as being outside the range (946 - IQR*1.5, 2800 + IQR*1.5). There were 4541 outliers in the data, taking the dataset from 39644 samples to 35103 samples. This had an immediate impact on the calculation of correlations. Although not depicted in the code above, I did analysis before removing the outliers and the correlations between shares and all other features were in the range [-0.07, +0.08]. As such, there were no strong correlations. After removing the outliers, the range increased to [-0.137, +0.148] with the strongest positive and negative relationships being with data_channel_is_entertainment (-0.105), data_channel_is_socmed (0.115), data_channel_is_world (-0.137), kw_avg_avg (0.148), weekday_is_saturday (0.102), is_weekend (0.140), and LDA_02 (-0.137).
+
+
+```{r}
+# BASIC STATISTICS ON SIGNIFICANT PREDICTORS
+
+summary(newsDataQuant$kw_max_avg)
+summary(newsDataQuant$kw_avg_avg)
+summary(newsDataQuant$LDA_00)
+summary(newsDataQuant$LDA_03)
+```
+
+
+Refer to above code. The above most highly correlated variables were plugged into a multiple linear regression model to predict number of shares for an article. The features weekday_is_saturday and is_weekend were used as an interaction term since they seem to be strongly related from a higher-level non-scientific perspective and for obvious reasons (Saturday is part of the weekend). The resulting model's terms were all statistically significant at a 5% level with p-values < 0.025. All of the coefficients were estimated to be in the positive of negative hundreds or thousands (i.e. the intercept is 1503, data_channel_is_entertainment is -373.5, and data_channel_is_socmed is 4.06.4). The only exception to this is kw_avg_avg, which has a coefficient of 0.0963, which is a decent amount closer to having a coefficient of 0 than the other terms. The RSS was 1065, which is significantly smaller than what was experienced in pre-liminary testing without removing outliers, when the RSS was around 11k. The multiple r-squred is 0.069, which is not too bad considering we are working with 60 predictors. The resulting 95% confidence intervals for the coefficients are relatively small, which is a positive because we can tell the general trend of the data and be confident since the range of possible values doesn't vary too much for each coefficient. Overall, the residuals are high, ranging from -4149 to 4316. This is not good news since the shares column ranges from values 1 to 5500. The better news is the first quartile of the residuals is -702.7 and the third quartile is 376.7, so the middle 50% of data doesn't differ by a ton.
+
+
+```{r}
+# FORWARD SUBSET SELECTION
+library(leaps)
+
+newsClassif <- head(newsDataQuant, 35000) # current classification set we're using for all classification problems (change to newsDataBinary for binary classification or newsDataTrinary for three-way classification)
+
+trainIndex <- sample(1:nrow(newsClassif), 1*nrow(newsClassif)) # train indices
+testIndex <- setdiff(1:nrow(newsClassif), trainIndex) # test indices
+train <- newsClassif[trainIndex,]
+test <- newsClassif[testIndex,]
+trainX <- newsClassif[trainIndex, -61]
+trainY <- newsClassif[trainIndex, "shares"]
+testX <- as.data.frame(newsClassif[testIndex, -61])
+testY <- as.data.frame(newsClassif[testIndex, "shares"])
+
+regfit.full = regsubsets(shares ~ ., data = train, method = "forward")
+summary(regfit.full)
+```
+
+```{r}
+# KNN REGRESSION
+
+set.seed(1)
+printf <- function(...) cat(sprintf(...))
+
+newsDataBinary <- data.frame(newsDataQuant) # make a copy
+newsDataBinary$shares <- ifelse(newsDataBinary$shares > quantile(newsDataBinary$shares, 0.5), 1, 0) # note the 0.5 for the quantile, indicating the split at the 50th percentile; change to 0.7 and 0.9 for the 70th and 90th percentile splits respectively
+
+newsDataTrinary <- data.frame(newsDataQuant) # make a copy
+newsDataTrinary$shares <- ifelse(newsDataTrinary$shares > quantile(newsDataTrinary$shares, 0.333), ifelse(newsDataTrinary$shares > quantile(newsDataTrinary$shares, 0.667), 1, 0), -1) # convert labels to -1, 0, and 1 for the with 1/3 and 2/3 quantiles as threshold barriers
+
+newsClassif <- head(newsDataQuant, 2000) # current classification set we're using for all classification problems (change to newsDataBinary for binary classification or newsDataTrinary for three-way classification)
+
+gc()
+library(StatMatch)
+library(FastKNN)
+library(caret)
+library(FactoMineR)
+
+fold_n = 5
+folds <- cut(seq(1, nrow(newsClassif)), breaks = fold_n, labels = FALSE)
+k_values <- c(1, 3, 5, 21, 51, 101, 501, 1001)
+accuracies <- c()
+for(j in k_values){
+  acc <- 0
+  for(i in 1:fold_n){
+    # grab the i-th fold
+    testIndices <- which(folds == i, arr.ind=TRUE)
+    test <- newsClassif[testIndices,]
+    train <- newsClassif[-testIndices,]
+    trainX <- newsClassif[-testIndices, -61]
+    trainY <- newsClassif[-testIndices, "shares"]
+    testX <- as.data.frame(newsClassif[testIndices, -61])
+    testY <- as.data.frame(newsClassif[testIndices, "shares"])
+    
+    trainYDF <- as.data.frame(trainY)
+    
+    gower.mat <- gower.dist(testX, trainX)
+    newsKnn <- knn_test_function(trainX, testX, gower.mat, trainY, k = j)
+    
+    running_avg <- 0
+    for(m in 1:length(testY)){
+      nn <- k.nearest.neighbors(m, gower.mat, k = j)
+      avg <- mean(trainYDF[nn, ])
+      se <- (avg - testY[m, ])^2
+      running_avg <- running_avg + se
+    }
+    running_avg <- running_avg / length(testY)
+    
+    acc <- acc + running_avg
+  }
+  acc <- acc/fold_n
+  printf("kNN with k = %d accuracy: %f\n", j, acc)
+  accuracies <- c(accuracies, acc)
+}
+plot(k_values, accuracies, type="b", main="Accuracies vs. Values of K for Regression kNN")
+```
+
+```{r}
+# KNN BINARY CLASSIFICATION
+
+set.seed(1)
+printf <- function(...) cat(sprintf(...))
+
+newsDataBinary <- data.frame(newsDataQuant) # make a copy
+newsDataBinary$shares <- ifelse(newsDataBinary$shares > quantile(newsDataBinary$shares, 0.5), 1, 0) # note the 0.5 for the quantile, indicating the split at the 50th percentile; change to 0.7 and 0.9 for the 70th and 90th percentile splits respectively
+
+newsDataTrinary <- data.frame(newsDataQuant) # make a copy
+newsDataTrinary$shares <- ifelse(newsDataTrinary$shares > quantile(newsDataTrinary$shares, 0.333), ifelse(newsDataTrinary$shares > quantile(newsDataTrinary$shares, 0.667), 1, 0), -1) # convert labels to -1, 0, and 1 for the with 1/3 and 2/3 quantiles as threshold barriers
+
+newsClassif <- head(newsDataBinary, 2000) # current classification set we're using for all classification problems (change to newsDataBinary for binary classification or newsDataTrinary for three-way classification)
+
+gc()
+library(StatMatch)
+library(FastKNN)
+library(caret)
+library(FactoMineR)
+
+fold_n = 5
+folds <- cut(seq(1, nrow(newsClassif)), breaks = fold_n, labels = FALSE)
+k_values <- c(1, 3, 5, 21, 51, 101, 501, 1001)
+accuracies <- c()
+for(j in k_values){
+  acc <- 0
+  for(i in 1:fold_n){
+    #printf("i: %d\n", i) # print the current fold iteration
+    
+    # grab the i-th fold
+    testIndices <- which(folds == i, arr.ind=TRUE)
+    test <- newsClassif[testIndices,]
+    train <- newsClassif[-testIndices,]
+    trainX <- newsClassif[-testIndices, -61]
+    trainY <- newsClassif[-testIndices, "shares"]
+    testX <- as.data.frame(newsClassif[testIndices, -61])
+    testY <- as.data.frame(newsClassif[testIndices, "shares"])
+    
+    trainYDF <- as.data.frame(trainY)
+    
+    gower.mat <- gower.dist(testX, trainX)
+    newsKnn <- knn_test_function(trainX, testX, gower.mat, trainY, k = j)
+    
+    conf_matrix <- table(newsKnn, t(testY)) # confusion matrix
+    acc <- acc + sum(diag(conf_matrix))/sum(conf_matrix)
+  }
+  acc <- acc/fold_n
+  printf("kNN with k = %d accuracy: %f\n", j, acc)
+  accuracies <- c(accuracies, acc)
+}
+plot(k_values, accuracies, type="b", main="Accuracies vs. Values of K for Binary Classification kNN")
+```
+
+```{r}
+# KNN THREE-WAY CLASSIFICATION
+
+set.seed(1)
+printf <- function(...) cat(sprintf(...))
+
+newsDataBinary <- data.frame(newsDataQuant) # make a copy
+newsDataBinary$shares <- ifelse(newsDataBinary$shares > quantile(newsDataBinary$shares, 0.5), 1, 0) # note the 0.5 for the quantile, indicating the split at the 50th percentile; change to 0.7 and 0.9 for the 70th and 90th percentile splits respectively
+
+newsDataTrinary <- data.frame(newsDataQuant) # make a copy
+newsDataTrinary$shares <- ifelse(newsDataTrinary$shares > quantile(newsDataTrinary$shares, 0.333), ifelse(newsDataTrinary$shares > quantile(newsDataTrinary$shares, 0.667), 1, 0), -1) # convert labels to -1, 0, and 1 for the with 1/3 and 2/3 quantiles as threshold barriers
+
+newsClassif <- head(newsDataTrinary, 2000) # current classification set we're using for all classification problems (change to newsDataBinary for binary classification or newsDataTrinary for three-way classification)
+
+gc()
+library(StatMatch)
+library(FastKNN)
+library(caret)
+library(FactoMineR)
+
+fold_n = 5
+folds <- cut(seq(1, nrow(newsClassif)), breaks = fold_n, labels = FALSE)
+k_values <- c(1, 3, 5, 21, 51, 101, 501, 1001)
+accuracies <- c()
+for(j in k_values){
+  acc <- 0
+  for(i in 1:fold_n){
+    # grab the i-th fold
+    testIndices <- which(folds == i, arr.ind=TRUE)
+    test <- newsClassif[testIndices,]
+    train <- newsClassif[-testIndices,]
+    trainX <- newsClassif[-testIndices, -61]
+    trainY <- newsClassif[-testIndices, "shares"]
+    testX <- as.data.frame(newsClassif[testIndices, -61])
+    testY <- as.data.frame(newsClassif[testIndices, "shares"])
+    
+    trainYDF <- as.data.frame(trainY)
+    
+    gower.mat <- gower.dist(testX, trainX)
+    newsKnn <- knn_test_function(trainX, testX, gower.mat, trainY, k = j)
+    
+    conf_matrix <- table(newsKnn, t(testY)) # confusion matrix
+    acc <- acc + sum(diag(conf_matrix))/sum(conf_matrix)
+  }
+  acc <- acc/fold_n
+  printf("kNN with k = %d accuracy: %f\n", j, acc)
+  accuracies <- c(accuracies, acc)
+}
+plot(k_values, accuracies, type="b", main="Accuracies vs. Values of K for Three-way Classification kNN")
+```
+
+```{r}
+# RANDOM FORESTS REGRESSION
+
+library(randomForest)
+library(leaps)
+set.seed(10)
+gc()
+
+newsDataBinary <- data.frame(newsDataQuant) # make a copy
+newsDataBinary$shares <- ifelse(newsDataBinary$shares > quantile(newsDataBinary$shares, 0.5), 1, 0)
+
+newsDataTrinary <- data.frame(newsDataQuant) # make a copy
+newsDataTrinary$shares <- ifelse(newsDataTrinary$shares > quantile(newsDataTrinary$shares, 0.333), ifelse(newsDataTrinary$shares > quantile(newsDataTrinary$shares, 0.667), 1, 0), -1) # convert labels to -1, 0, and 1 for the with 1/3 and 2/3 quantiles as threshold barriers
+
+newsClassif <- head(newsDataQuant, 10000) # current classification set we're using for all classification problems (change to newsDataBinary for binary classification or newsDataTrinary for three-way classification)
+
+fold_n = 5
+folds <- cut(seq(1, nrow(newsClassif)), breaks = fold_n, labels = FALSE)
+num_trees <- c(2, 4, 6, 20, 50, 100, 500, 1000)
+rand_factor <- c(2, 4, 8, 16, 32, 55)
+#num_trees <- c(8)
+accuracies <- c()
+rsqs <- c()
+for(j in num_trees){
+  acc <- 0 # mse
+  rs <- 0 # r-squared
+  for(i in 1:fold_n){
+    # grab the i-th fold
+    testIndices <- which(folds == i, arr.ind=TRUE)
+    test <- newsClassif[testIndices,]
+    train <- newsClassif[-testIndices,]
+    trainX <- newsClassif[-testIndices, -61]
+    trainY <- as.factor(newsClassif[-testIndices, "shares"])
+    testX <- as.data.frame(newsClassif[testIndices, -61])
+    testY <- as.data.frame(newsClassif[testIndices, "shares"])
+    
+    forest <- randomForest(x = trainX, y = trainY, ntree = j, mtry = 8)
+    forestPred <- predict(forest, newdata = testX)
+
+    acc <- acc + mean((forestPred - t(testY))^2) # get the MSE
+    rs <- rs + mean(forest$rsq)
+    #conf_matrix <- table(forestPred, t(testY)) # confusion matrix
+    #acc <- acc + sum(diag(conf_matrix))/sum(conf_matrix)
+  }
+  acc <- acc/fold_n
+  rs <- rs/fold_n
+  printf("Random Forests with num trees = %d accuracy: %f, r-squared: %f\n", j, acc, rs)
+  accuracies <- c(accuracies, acc)
+  rsqs <- c(rsqs, rs)
+}
+plot(num_trees, accuracies, type="b", main="Accuracies vs. Random Forests Num Trees")
+plot(num_trees, rsqs, type="b", main="R squared vs. Random Forests Num Trees")
+```
+
+```{r}
+# RANDOM FORESTS REGRESSION
+
+library(randomForest)
+library(leaps)
+set.seed(10)
+gc()
+
+newsDataBinary <- data.frame(newsDataQuant) # make a copy
+newsDataBinary$shares <- ifelse(newsDataBinary$shares > quantile(newsDataBinary$shares, 0.5), 1, 0)
+
+newsDataTrinary <- data.frame(newsDataQuant) # make a copy
+newsDataTrinary$shares <- ifelse(newsDataTrinary$shares > quantile(newsDataTrinary$shares, 0.333), ifelse(newsDataTrinary$shares > quantile(newsDataTrinary$shares, 0.667), 1, 0), -1) # convert labels to -1, 0, and 1 for the with 1/3 and 2/3 quantiles as threshold barriers
+
+newsClassif <- head(newsDataQuant, 10000) # current classification set we're using for all classification problems (change to newsDataBinary for binary classification or newsDataTrinary for three-way classification)
+
+fold_n = 5
+folds <- cut(seq(1, nrow(newsClassif)), breaks = fold_n, labels = FALSE)
+#num_trees <- c(2, 4, 6, 20, 50, 100, 500, 1000)
+rand_factor <- c(2, 4, 8, 16, 32, 55)
+accuracies <- c()
+rsqs <- c()
+for(j in rand_factor){
+  acc <- 0 # mse
+  rs <- 0 # r-squared
+  for(i in 1:fold_n){
+    # grab the i-th fold
+    testIndices <- which(folds == i, arr.ind=TRUE)
+    test <- newsClassif[testIndices,]
+    train <- newsClassif[-testIndices,]
+    trainX <- newsClassif[-testIndices, -61]
+    trainY <- as.factor(newsClassif[-testIndices, "shares"])
+    testX <- as.data.frame(newsClassif[testIndices, -61])
+    testY <- as.data.frame(newsClassif[testIndices, "shares"])
+    
+    forest <- randomForest(x = trainX, y = trainY, ntree = 20, mtry = j)
+    forestPred <- predict(forest, newdata = testX)
+
+    acc <- acc + mean((forestPred - t(testY))^2) # get the MSE
+    rs <- rs + mean(forest$rsq)
+  }
+  acc <- acc/fold_n
+  rs <- rs/fold_n
+  printf("Random Forests with rand factor = %d accuracy: %f, r-squared: %f\n", j, acc, rs)
+  accuracies <- c(accuracies, acc)
+  rsqs <- c(rsqs, rs)
+}
+plot(rand_factor, accuracies, type="b", main="Accuracies vs. Random Forests Randomization Factor")
+plot(rand_factor, rsqs, type="b", main="R squared vs. Random Forests Randomization Factor")
+```
+
+```{r}
+# RANDOM FORESTS REGRESSION
+
+library(randomForest)
+library(leaps)
+set.seed(10)
+gc()
+
+newsDataBinary <- data.frame(newsDataQuant) # make a copy
+newsDataBinary$shares <- ifelse(newsDataBinary$shares > quantile(newsDataBinary$shares, 0.5), 1, 0)
+
+newsDataTrinary <- data.frame(newsDataQuant) # make a copy
+newsDataTrinary$shares <- ifelse(newsDataTrinary$shares > quantile(newsDataTrinary$shares, 0.333), ifelse(newsDataTrinary$shares > quantile(newsDataTrinary$shares, 0.667), 1, 0), -1) # convert labels to -1, 0, and 1 for the with 1/3 and 2/3 quantiles as threshold barriers
+
+newsClassif <- head(newsDataQuant, 10000) # current classification set we're using for all classification problems (change to newsDataBinary for binary classification or newsDataTrinary for three-way classification)
+
+fold_n = 5
+folds <- cut(seq(1, nrow(newsClassif)), breaks = fold_n, labels = FALSE)
+accuracies <- c()
+rsqs <- c()
+acc <- 0 # mse
+rs <- 0 # r-squared
+for(i in 1:fold_n){
+  # grab the i-th fold
+  testIndices <- which(folds == i, arr.ind=TRUE)
+  test <- newsClassif[testIndices,]
+  train <- newsClassif[-testIndices,]
+  trainX <- newsClassif[-testIndices, -61]
+  trainY <- as.factor(newsClassif[-testIndices, "shares"])
+  testX <- as.data.frame(newsClassif[testIndices, -61])
+  testY <- as.data.frame(newsClassif[testIndices, "shares"])
+  
+  forest <- randomForest(x = trainX, y = trainY, ntree = j, mtry = 8)
+  forestPred <- predict(forest, newdata = testX)
+
+  acc <- acc + mean((forestPred - t(testY))^2) # get the MSE
+  rs <- rs + mean(forest$rsq)
+}
+acc <- acc/fold_n
+rs <- rs/fold_n
+printf("Random Forests with num trees = 20, randomization factor = 8; accuracy: %f, r-squared: %f\n", acc, rs)
+```
+
+```{r}
+# RANDOM FORESTS BINARY CLASSIFICATION
+
+library(randomForest)
+library(leaps)
+set.seed(10)
+gc()
+
+newsDataBinary <- data.frame(newsDataQuant) # make a copy
+newsDataBinary$shares <- ifelse(newsDataBinary$shares > quantile(newsDataBinary$shares, 0.5), 1, 0)
+
+newsDataTrinary <- data.frame(newsDataQuant) # make a copy
+newsDataTrinary$shares <- ifelse(newsDataTrinary$shares > quantile(newsDataTrinary$shares, 0.333), ifelse(newsDataTrinary$shares > quantile(newsDataTrinary$shares, 0.667), 1, 0), -1) # convert labels to -1, 0, and 1 for the with 1/3 and 2/3 quantiles as threshold barriers
+
+newsClassif <- head(newsDataBinary, 10000) # current classification set we're using for all classification problems (change to newsDataBinary for binary classification or newsDataTrinary for three-way classification)
+
+fold_n = 5
+folds <- cut(seq(1, nrow(newsClassif)), breaks = fold_n, labels = FALSE)
+acc <- 0 # mse
+for(i in 1:fold_n){
+  # grab the i-th fold
+  testIndices <- which(folds == i, arr.ind=TRUE)
+  test <- newsClassif[testIndices,]
+  train <- newsClassif[-testIndices,]
+  trainX <- newsClassif[-testIndices, -61]
+  trainY <- as.factor(newsClassif[-testIndices, "shares"])
+  testX <- as.data.frame(newsClassif[testIndices, -61])
+  testY <- as.data.frame(newsClassif[testIndices, "shares"])
+  
+  forest <- randomForest(x = trainX, y = trainY, ntree = 20, mtry = 8)
+  forestPred <- predict(forest, newdata = testX)
+
+  conf_matrix <- table(forestPred, t(testY)) # confusion matrix
+  acc <- acc + sum(diag(conf_matrix))/sum(conf_matrix)
+}
+acc <- acc/fold_n
+printf("Random Forests with num trees = 20, randomization factor = 8; accuracy: %f\n", acc)
+```
+
+```{r}
+# RANDOM FORESTS THREE-WAY CLASSIFICATION
+
+library(randomForest)
+library(leaps)
+set.seed(10)
+gc()
+
+newsDataBinary <- data.frame(newsDataQuant) # make a copy
+newsDataBinary$shares <- ifelse(newsDataBinary$shares > quantile(newsDataBinary$shares, 0.5), 1, 0)
+
+newsDataTrinary <- data.frame(newsDataQuant) # make a copy
+newsDataTrinary$shares <- ifelse(newsDataTrinary$shares > quantile(newsDataTrinary$shares, 0.333), ifelse(newsDataTrinary$shares > quantile(newsDataTrinary$shares, 0.667), 1, 0), -1) # convert labels to -1, 0, and 1 for the with 1/3 and 2/3 quantiles as threshold barriers
+
+newsClassif <- head(newsDataTrinary, 10000) # current classification set we're using for all classification problems (change to newsDataBinary for binary classification or newsDataTrinary for three-way classification)
+
+fold_n = 5
+folds <- cut(seq(1, nrow(newsClassif)), breaks = fold_n, labels = FALSE)
+acc <- 0 # mse
+for(i in 1:fold_n){
+  # grab the i-th fold
+  testIndices <- which(folds == i, arr.ind=TRUE)
+  test <- newsClassif[testIndices,]
+  train <- newsClassif[-testIndices,]
+  trainX <- newsClassif[-testIndices, -61]
+  trainY <- as.factor(newsClassif[-testIndices, "shares"])
+  testX <- as.data.frame(newsClassif[testIndices, -61])
+  testY <- as.data.frame(newsClassif[testIndices, "shares"])
+  
+  forest <- randomForest(x = trainX, y = trainY, ntree = 20, mtry = 8)
+  forestPred <- predict(forest, newdata = testX)
+
+  conf_matrix <- table(forestPred, t(testY)) # confusion matrix
+  acc <- acc + sum(diag(conf_matrix))/sum(conf_matrix)
+}
+acc <- acc/fold_n
+printf("Random Forests with num trees = 20, randomization factor = 8; accuracy: %f\n", acc)
+```

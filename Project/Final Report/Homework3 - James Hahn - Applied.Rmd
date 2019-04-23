@@ -1,0 +1,277 @@
+---
+title: "Statistical Learning - Homework 3 (Applied)"
+author: James Hahn
+output: pdf_document
+---
+
+### Chapter 4 - Exercise 11
+
+a) 
+```{r}
+library(ISLR)
+library(MASS)
+library(class)
+
+attach(Auto)
+mpg01 <- rep(0, length(mpg))
+mpg01[mpg > median(mpg)] <- 1
+Auto <- data.frame(Auto, mpg01)
+```
+
+b)
+```{r}
+library(TeachingDemos)
+
+cor(Auto[, -9])
+pairs2(Auto[,1:5], Auto[,1:5])
+pairs2(Auto[,1:5], Auto[,6:10])
+pairs2(Auto[,6:10], Auto[,1:5])
+pairs2(Auto[,6:10], Auto[,6:10])
+boxplot(cylinders ~ mpg01, data = Auto, main = "Cylinders vs. mpg01")
+boxplot(displacement ~ mpg01, data = Auto, main = "Displacement vs. mpg01")
+boxplot(horsepower ~ mpg01, data = Auto, main = "Horsepower vs. mpg01")
+boxplot(weight ~ mpg01, data = Auto, main = "Weight vs. mpg01")
+boxplot(acceleration ~ mpg01, data = Auto, main = "Acceleration vs. mpg01")
+boxplot(year ~ mpg01, data = Auto, main = "Year vs. mpg01")
+```
+
+From the above graphs, we can see there is some relation between mpg01 and the following features: cylinders, weight, displacement, and horsepower.
+
+c)
+```{r}
+train <- (year %% 2 == 0)
+Auto.train <- Auto[train, ]
+Auto.test <- Auto[!train, ]
+mpg01.test <- mpg01[!train]
+```
+
+d) 
+```{r}
+fit.lda <- lda(mpg01 ~ cylinders + weight + displacement + horsepower, data = Auto, subset = train)
+fit.lda
+pred.lda <- predict(fit.lda, Auto.test)
+table(pred.lda$class, mpg01.test)
+mean(pred.lda$class != mpg01.test)
+```
+
+The test error is 12.63736%.
+
+e)
+```{r}
+fit.qda <- qda(mpg01 ~ cylinders + weight + displacement + horsepower, data = Auto, subset = train)
+fit.qda
+pred.qda <- predict(fit.qda, Auto.test)
+table(pred.qda$class, mpg01.test)
+mean(pred.qda$class != mpg01.test)
+```
+
+The test error is 13.18681%.
+
+f)
+```{r}
+fit.glm <- glm(mpg01 ~ cylinders + weight + displacement + horsepower, data = Auto, family = binomial, subset = train)
+summary(fit.glm)
+probs <- predict(fit.glm, Auto.test, type = "response")
+pred.glm <- rep(0, length(probs))
+pred.glm[probs > 0.5] <- 1
+table(pred.glm, mpg01.test)
+mean(pred.glm != mpg01.test)
+```
+
+The test error is 12.08791%.
+
+g)
+```{r}
+train.X <- cbind(cylinders, weight, displacement, horsepower)[train, ]
+test.X <- cbind(cylinders, weight, displacement, horsepower)[!train, ]
+train.mpg01 <- mpg01[train]
+set.seed(1)
+pred.knn <- knn(train.X, test.X, train.mpg01, k = 1)
+table(pred.knn, mpg01.test)
+mean(pred.knn != mpg01.test)
+pred.knn <- knn(train.X, test.X, train.mpg01, k = 10)
+table(pred.knn, mpg01.test)
+mean(pred.knn != mpg01.test)
+pred.knn <- knn(train.X, test.X, train.mpg01, k = 100)
+table(pred.knn, mpg01.test)
+mean(pred.knn != mpg01.test)
+```
+
+K=1: The test error is 15.38462%.
+K=10: The test error is 16.48352%.
+K=100: The test error is 14.28571%.
+Therefore, K=100 performs the best on this dataset.
+
+### Homework 3 - Question 6
+
+a)
+```{r}
+example(UCBAdmissions)
+```
+
+The first plot implies males make up a significantly higher proportion of the admitted students compared to females. Meanwhile, males and females make up about the same proportion of rejected students (50/50 split). Therefore, yes, there seems to be a bias toward males being admitted more than females. The overall percentage of men that were accepted is 44.5188%, while the percentage for women is 30.3542%.
+
+b)
+These 6 plots show that none of the departments are inherently biased. We can see this by comparing the admitted box splits to the rejected box splits. If there is a serious imbalance when comparing admitted to rejected, then there is some bias, as seen in part a). This is not the case for these 6 plots.
+
+c)
+The general idea of the paradox is that a specific trend appears when a bunch of data is aggregated (such as in the initial plot), but then completely disappears when the data is split into their respective subgroups (such as in the subsequent 6 plots).
+
+d)
+We can probably explain this away by claiming females applied to extremely competitive departments that already have low acceptance rates, while men typically applied to less competitive departments with higher acceptance rates. So, more men ended up getting into their desired departments anyway, thus increasing the number of overall men accepted compared to females.
+
+e)
+```{r}
+data(UCBAdmissions)
+Adm <- as.integer(UCBAdmissions)[(1:(6*2))*2-1]
+Rej <- as.integer(UCBAdmissions)[(1:(6*2))*2]
+Dept <- gl(6,2,6*2,labels=c("A","B","C","D","E","F"))
+Sex <- gl(2,1,6*2,labels=c("Male","Female"))
+Ratio <- Adm/(Rej+Adm)
+
+berk <- data.frame(Adm,Rej,Sex,Dept,Ratio)
+
+head(berk)
+
+LogReg.gender <- glm(cbind(Adm,Rej)~Sex,data=berk,family=binomial("logit"))
+summary(LogReg.gender)
+```
+
+We can claim the admission rate of females is statistically significant with p-value < 2e-16. So, there is a bias against females.
+
+f)
+```{r}
+LogReg.gender <- glm(cbind(Adm,Rej)~Sex+Dept,data=berk,family=binomial("logit"))
+summary(LogReg.gender)
+```
+
+After taking departments into consideration, we can see the female acceptance rate is no longer statistically significant (p-value of 0.217), so there is no bias against females. The coefficient for females drops from -0.61035 to 0.09987, so it is closer to 0 compared to part e), making it less of a factor.
+
+In this problem, we have shown the Simpson paradox, which is the idea of aggregated data showing specific trends, but subgroups of the data not showing those trends at all. Thus, the data may seem biased, but in fact is actually balanced and further inference of the data can lead to a higher-level reasoning about this paradox. One can uncover these biases by either plotting the subgroups, as we did in parts a) and b), or by fitting a model to the data, such as logistic regression, and doing hypothesis testing on the predictors to see if they are statistically significant, indicating a significant trend in the data.
+
+Bonus)
+```{r}
+LogReg.gender <- glm(cbind(Adm,Rej) ~ Sex + Dept + Sex*Dept,data=berk,family=binomial("logit"))
+summary(LogReg.gender)
+```
+
+This model is definitely different compared to the previous two models because Females in Department C are suddently statistically significant. Similar to the previous model, departments C-F are statistically significant, while Department B is not significant. In this model, we have gone back to female admission rates once again being statistically significant. As such, including the gender/department interaction term makes some of the previously insignificant interactions being statistically significant. For females in department C, there seems to be a slight bias against females since the p-value is statistically significant (8.53e-05) and the coefficient is negative. This is hardly observed in the previous plots, but the p-value isn't as low as the other p-values (8.53e-05 compared to the results above with p-values of 3.34e-14, 2e-16, etc.), so the bias isn't as obvious. I would say this agrees with our data in the plots from part (b) since none of the departments' p-values are statistically significant when interacted with gender, except for departments C, D, and E, which agrees with the slight skew of the charts in (b).
+
+### Homework 3 - Question 7
+
+```{r}
+library(DMwR)
+library(class)
+library(MASS)
+library(stats)
+
+newsDataOriginal <- read.table("OnlineNewsPopularity.csv", header=TRUE, sep=",")
+newsDataOriginal$shares = as.numeric(newsDataOriginal$shares)
+names(newsDataOriginal)
+summary(newsDataOriginal)
+summary(newsDataOriginal$shares)
+newsDataLen <- nrow(newsDataOriginal)
+shares_bins <- cut(newsDataOriginal$shares, 50, include.lowest=TRUE)
+plot(shares_bins)
+
+sharesIqr <- IQR(newsDataOriginal$shares)
+shares75Quant <- quantile(newsDataOriginal$shares, 0.75)
+shares25Quant <- quantile(newsDataOriginal$shares, 0.25)
+newsData <- newsDataOriginal[newsDataOriginal$shares < (1.5*sharesIqr + shares75Quant) & newsDataOriginal$shares > (shares25Quant - 1.5*sharesIqr), ] # outliers removed
+summary(newsData$shares)
+numOutliers <- (newsDataLen - nrow(newsData))
+
+shares_bins <- cut(newsData$shares, 50, include.lowest=TRUE)
+plot(shares_bins)
+plot(newsData$kw_max_avg, newsData$shares)
+
+newsDataQuant <- newsData[, sapply(newsData, class) == "numeric"]
+names(newsDataQuant)
+cor(as.matrix(newsData[, 61]), as.matrix(newsData[,-1])) # correlations with 'shares' and every other variable
+```
+
+
+Refer to above code. The above code does a lot of work. I have done some preprocessing on the data. For example, I plotted the original news data with 20 histogram bins and immediately realized the distribution was significantly skewed to the right. I concluded there were definitely outliers in the data, so I went into further analysis. I did a summary of the shares data, which is the target/predicted label, and saw the first quartile was at 946 shares, third quartile was at 2800 shares, and then the min and max were 1 and 843,300 respectively. Therefore, with an IQR of 1854, I calculated outliers as being outside the range (946 - IQR*1.5, 2800 + IQR*1.5). There were 4541 outliers in the data, taking the dataset from 39644 samples to 35103 samples. This had an immediate impact on the calculation of correlations. Although not depicted in the code above, I did analysis before removing the outliers and the correlations between shares and all other features were in the range [-0.07, +0.08]. As such, there were no strong correlations. After removing the outliers, the range increased to [-0.137, +0.148] with the strongest positive and negative relationships being with data_channel_is_entertainment (-0.105), data_channel_is_socmed (0.115), data_channel_is_world (-0.137), kw_avg_avg (0.148), weekday_is_saturday (0.102), is_weekend (0.140), and LDA_02 (-0.137).
+
+
+```{r}
+newsLm <- lm(shares ~ data_channel_is_entertainment + data_channel_is_socmed + data_channel_is_world + kw_avg_avg + LDA_02 + weekday_is_saturday:is_weekend, data = newsData)
+summary(newsLm)
+confint(newsLm)
+plot(newsLm)
+```
+
+
+Refer to above code. The above most highly correlated variables were plugged into a multiple linear regression model to predict number of shares for an article. The features weekday_is_saturday and is_weekend were used as an interaction term since they seem to be strongly related from a higher-level non-scientific perspective and for obvious reasons (Saturday is part of the weekend). The resulting model's terms were all statistically significant at a 5% level with p-values < 0.025. All of the coefficients were estimated to be in the positive of negative hundreds or thousands (i.e. the intercept is 1503, data_channel_is_entertainment is -373.5, and data_channel_is_socmed is 4.06.4). The only exception to this is kw_avg_avg, which has a coefficient of 0.0963, which is a decent amount closer to having a coefficient of 0 than the other terms. The RSS was 1065, which is significantly smaller than what was experienced in pre-liminary testing without removing outliers, when the RSS was around 11k. The multiple r-squred is 0.069, which is not too bad considering we are working with 60 predictors. The resulting 95% confidence intervals for the coefficients are relatively small, which is a positive because we can tell the general trend of the data and be confident since the range of possible values doesn't vary too much for each coefficient. Overall, the residuals are high, ranging from -4149 to 4316. This is not good news since the shares column ranges from values 1 to 5500. The better news is the first quartile of the residuals is -702.7 and the third quartile is 376.7, so the middle 50% of data doesn't differ by a ton.
+
+
+```{r}
+newsDataBinary <- data.frame(newsDataQuant) # make a copy
+newsDataBinary$shares <- ifelse(newsDataBinary$shares > quantile(newsDataBinary$shares, 0.5), 1, 0)
+head(newsDataBinary)
+
+newsClassif <- newsDataBinary # current classification set we're using
+trainIndex <- sample(1:nrow(newsClassif), 0.8*nrow(newsClassif)) # train indices
+testIndex <- setdiff(1:nrow(newsClassif), trainIndex) # test indices
+train <- newsClassif[trainIndex,]
+test <- newsClassif[testIndex,]
+trainX <- newsClassif[trainIndex, -61]
+trainY <- newsClassif[trainIndex, "shares"]
+testX <- as.data.frame(newsClassif[testIndex, -61])
+testY <- as.data.frame(newsClassif[testIndex, "shares"])
+
+newsLogit <- glm(shares ~ data_channel_is_entertainment + data_channel_is_socmed + data_channel_is_world + kw_avg_avg + LDA_02 + weekday_is_saturday:is_weekend, family=binomial, data = newsDataBinary)
+summary(newsLogit)
+confint(newsLogit)
+
+logitPredict <- predict(newsLogit, testX, type="response")
+table(logitPredict > 0.5, t(testY))
+```
+
+
+Refer to above code. Next, the number of shares was binarized, converting the problem from regression to classification. If the number of shares was less than the median, it was replaced with a 0, and it was replaced with a 1 otherwise, turning it into a binary classification problem with balanced classes. The range of residuals is now [-3.330, 1.801], whereas it was [-4148.4, 4315.9] for multiple linear regression. This reduction is to be expected since residuals are just the predicted value minus the expected value and the scale has changed since we're working with binarized data for the shares. The threshold for binarization of the logistic regression predictions is a probability of 50%. A confusion matrix is provided. The accuracy of the model is 61.84%, with true positive rates of both classes hovering around 61%. It is difficult to compare this to the linear regression model above since this task was a binary classification. Also, the response feature has been scaled from the original data, so we cannot compare their coefficient values. All we can say is all coefficients are still statistically significant, agreeing with the linear regression model.
+
+
+```{r}
+newsDataTrinary <- data.frame(newsDataQuant) # make a copy
+newsDataTrinary$shares <- ifelse(newsDataTrinary$shares > quantile(newsDataTrinary$shares, 0.333), ifelse(newsDataTrinary$shares > quantile(newsDataTrinary$shares, 0.667), 1, 0), -1) # convert labels to -1, 0, and 1 for the with 1/3 and 2/3 quantiles as threshold barriers
+
+newsClassif <- newsDataBinary # current classification set we're using for all classification problems (change to newsDataBinary for binary classification or newsDataTrinary for three-way classification)
+
+trainIndex <- sample(1:nrow(newsClassif), 0.8*nrow(newsClassif)) # train indices
+testIndex <- setdiff(1:nrow(newsClassif), trainIndex) # test indices
+train <- newsClassif[trainIndex,]
+test <- newsClassif[testIndex,]
+trainX <- newsClassif[trainIndex, -61]
+trainY <- newsClassif[trainIndex, "shares"]
+testX <- as.data.frame(newsClassif[testIndex, -61])
+testY <- as.data.frame(newsClassif[testIndex, "shares"])
+
+newsLda <- lda(shares ~ data_channel_is_entertainment + data_channel_is_socmed + data_channel_is_world + kw_avg_avg + LDA_02 + weekday_is_saturday:is_weekend, data = newsClassif)
+newsLda
+ldaPredict <- predict(newsLda, testX)$class
+table(t(ldaPredict), t(testY))
+
+newsQda <- qda(shares ~ data_channel_is_entertainment + data_channel_is_socmed + data_channel_is_world + kw_avg_avg + LDA_02 + weekday_is_saturday:is_weekend, data = newsClassif)
+newsQda
+qdaPredict <- predict(newsQda, testX)$class
+table(t(qdaPredict), t(testY))
+```
+
+
+Refer to above code. The final step to convert this problem from regression to classification was to convert labels to -1, 0, and 1 for the shares (response) feature. In this case, -1 represents a non-popular article, 1 is a popular article, and 0 means the article wasn't popular or non-popular. The splits were made at the 1/3 and 2/3 quantiles. 
+
+In between training the kNN and converting the classifcation into a three-way task, both LDA and QDA were tested. LDA on a 3-way task resulted in a 43.56% accuracy and the 2-way task had a 61.57% accuracy, both a decent amount above their baselines of 33.33% and 50.00%. QDA resulted in a 3-way accuracy of 40.12% and a 2-way accuracy of 58.60%.  It is important to note the true negative rate on the binary task is 91.24%, but the true positive rate is only 21.21%. This does not occur in LDA, as its TPR and TNR are relatively equal. In both QDA and LDA, the "neutral" class in between the popular and non-popular classes in three-way classification resulted in the highest false negative rate. This is not surprising since we expect the most ambiguous class to perform the worst in terms of Type I and Type II errors.
+
+
+```{r}
+newsKnn <- kNN(shares ~ data_channel_is_entertainment + data_channel_is_socmed + data_channel_is_world + kw_avg_avg + LDA_02 + weekday_is_saturday:is_weekend, train, test, k = 101)
+table(newsKnn, t(testY)) # confusion matrix
+```
+
+
+Refer to above code. Then, the kNN function (found in the "DMwR" package), an abstracted layer on top of the vanilla R knn() function, was used as a classification. Instead of using all 59 predictors and 1 response for knn(), kNN provides the ability to input a formula for training, requiring less preprocessing of data. An 80%/20% train/test split was performed for classification. Those percentages are justified since we already have an abundance of data, and the response is only either two-way or three-way classification, so a test size of 7021 samples should be more than enough to accurately assess the model. A confusion matrix was created on the binary task for kNN (k = 3). Out of the 7021 samples, 1683 (23.97%) were true positives, 2433 (34.65%) were true negatives, 1578 (22.48%) were false negatives, and 1327 (18.90%) were false positives. As such, this results in a 59% binary classification accuracy, only slightly above the baseline of 50%. When k was increased to 11, the true positive and false negative rates stayed consistent, but the true negative rate increased and false positive rate decreased, resulting in an accuracy of 61%. As a simplified summary, when k = 101, accuracy was 64%. Further values of k were not tested at risk of introducing high bias into the model. Due to the high number of samples, k = 101 seems to  be a reasonable parameter value, while also producing the highest accuracy of the three tested models, whereas k = 3 might indicate a risk of overfitting. It is important to note this kNN model was only trained on the highly correlated predictors as mentioned above; using all predictors with k = 101 results in an accuracy of 63% with similar TPR/TNR/FPR/FNR. Finally, on the three-way classification task, on the newsDataTrinary data, with k = 101, an accuracy of 46.46% is achieved, which is significantly higher than the baseline os 33.33%. We can conclude kNN with k = 101 is an effective classifier for both classification tasks discussed. In fact, kNN is the preferred classifier over the other two classifiers, LDA and QDA.
+
+Please be aware, I did not explicitly include code for both two-way and three-way classification in the snippets above. Instead, I created one variable called "newsDataClassif" that can be assigned either the binary or trinary data, swapping out the data used for classification tasks for a bunch of commands. As such, if you do not immediately see results for the three-way classification in the graphs/charts/output above, don't be startled, it's just a matter of assigning "newsDataClassif" the value of newsDataTrinary.
+
+To wrap up, we displayed a bunch of information about the dataset. For example, we calculated correlations, removed outliers, performed multiple linear regression, logistic regression, LDA, QDA, and knn with several values of k. We thoroughly investigated the dataset and explored both regression and classification of the problem, where the regression task involves predicting the number of shares for an example, and the classification task is predicting "popular vs. non-popular" or "popular vs. non-popular vs. in-between".

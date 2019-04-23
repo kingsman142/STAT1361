@@ -1,0 +1,288 @@
+---
+title: "Statistical Learning - Homework 2"
+author: James Hahn
+output: pdf_document
+---
+
+### Chapter 3 - Exercise 3
+
+a) The regression line for Males is $\hat{y} = 50 + 20 \times GPA + 0.07 \times IQ + 0.01 \times GPA \times IQ$.
+Meanwhile, for Females, the line is $\hat{y} = 85 + 10 \times GPA + 0.07 \times IQ + 0.01 \times GPA \times IQ$.
+We know i) is false since a GPA of 0 means females make more than males. ii) is false since a GPA of 3.5 means the females make the same as males. iv) is false since the higher the GPA, the closer the starting salary of males is to the starting salary of females, eventually leading males to surpass females if the GPA is high enough. Therefore, iii) is the correct option.
+
+\bigskip
+
+b) $y = 85 + 10 \times GPA + 0.07 \times IQ + 0.01 \times GPA \times IQ$ = 85 + 40 + 7.7 + 4.4 = 137.1 . Therefore, the starting salary is $137,100.
+
+\bigskip
+
+c) False. To verify the lack of effectiveness on the model, we need to test the $H_o: \beta_4 = 0$, and then look at the p-value associated with the t or F statistic to draw a conclusion on whether or not to reject the null hypothesis.
+
+### Chapter 3 - Exercise 4
+
+a) Since the relationship between X and Y is linear, we expect the linear training RSS for linear regression will be lower than the cubic regression.
+
+\bigskip
+
+b) The polynomial regression fitting will be prone to overfitting, so the cubic regression test RSS is expected to be higher than the linear regression test RSS. Therefore, the linear regression RSS is expected to be lower than cubic regression RSS.
+
+\bigskip
+
+c) Polynomial regression has more flexibility, so since the relationship is not linear, we expect the cubic regression training RSS to be lower than the linear regression training RSS.
+
+\bigskip
+
+d) The only information we are given is the relationship is not linear. This can mean the relationship is very close to being linear or very far from being linear. As such, we do not know enough about the test dataset to assess the situation and cannot draw conclusions on whether linear or cubic regression test RSS is lower.
+
+### Chapter 3 - Exercise 9
+
+a) 
+```{r}
+library(ISLR)
+
+pairs(Auto)
+```
+
+b) 
+```{r}
+names(Auto)
+cor(Auto[1:8])
+```
+
+c)  
+    i. 
+```{r}
+fit2 <- lm(mpg ~ . - name, data = Auto)
+summary(fit2)
+```
+
+    ii. From part i), we can see cylinders, horsepower, and acceleration all have p-values in the range of (0.025, 0.975), so they are all statistically significant.
+
+    iii. It suggests that the every year, mpg of cars increase by 0.750773, which means cars become more fuel efficient every year.
+
+d)
+```{r}
+par(mfrow = c(2, 2))
+plot(fit2)
+```
+
+The plot of residuals vs. fitted values shows some non-linearity in the data. The plot of standardized residuals vs. leverage shows presence of a few outliers above +2 and below -2. There is one high leverage point at point 14.
+
+e)
+```{r}
+fit3 <- lm(mpg ~ cylinders * displacement+displacement * weight, data = Auto[, 1:8])
+summary(fit3)
+```
+
+From above, after observing the p-values, we can see the interaction between cylinders and displacement is not statistically significant, while the interaction between displacement and weight is statistically significant.
+
+f)
+```{r}
+par(mfrow = c(2, 2))
+plot(log(Auto$horsepower), Auto$mpg)
+plot(sqrt(Auto$horsepower), Auto$mpg)
+plot((Auto$horsepower)^2, Auto$mpg)
+```
+
+In this sample, we observed horsepower in the three requested transformations. We can clearly see the log transformation provides the most linear-looking scatterplot.
+
+### Chapter 3 - Exercise 10
+
+a)
+```{r}
+data(Carseats)
+fit3 <- lm(Sales ~ Price + Urban + US, data = Carseats)
+summary(fit3)
+```
+
+b)
+
+The US variable indicates a US store sells 1200.573 more units than non-US stores with all other predictors fixed. The Urban variable indicates an urban store sells 21.916 less units than rural stores with all other predictors fixed. The Price variable indicates for every dollar increase, 54.459 fewer units are sold with all other predictors fixed.
+
+c)
+
+The model is written as $Sales = 13.043469 - 0.054459 \times Price - 0.021916 \times Urban + 1.200573 \times US + \epsilon$. It is important to note in this equation, Urban = 1 if the store is in an urban location, and 0 otherwise. Also, US = 1 if the store is in the US and 0 otherwise.
+
+d)
+
+We can reject the null for Price and US since their p-values are < 0.025.
+
+e)
+```{r}
+fit4 <- lm(Sales ~ Price + US, data = Carseats)
+summary(fit4)
+```
+
+f)
+
+The correlation, or $R^2$ value, for the smaller model is only slightly higher than the original model. It indicates 23.93% of the variability is explained by this model. They perform pretty much just as well as each other. They are very mediocre.
+
+g)
+```{r}
+confint(fit4)
+```
+
+h)
+```{r}
+par(mfrow = c(2, 2))
+plot(fit4)
+```
+
+The standardized results vs. leverage plot shows a few outliers with standardized residuals lower than -2 and higher than +2. Also, there are many high leverage points that exceed 0.01.
+
+### Chapter 3 - Exercise 13
+
+a)
+```{r}
+set.seed(1)
+x <- rnorm(100)
+```
+
+b)
+```{r}
+eps <- rnorm(100, sd = sqrt(0.25))
+```
+
+c) 
+```{r}
+y <- -1 + 0.5 * x + eps
+length(y)
+```
+
+The length of y is 100. The values of $\beta_0$ and $\beta_1$ are -1 and 0.5 respectively.
+
+d)
+```{r}
+plot(x, y)
+```
+
+The relationship between x and y is moderately strong and positively linear. Because of eps, there is some noise introduced, which might be throwing the model off.
+
+e) 
+```{r}
+fit9 <- lm(y ~ x)
+summary(fit9)
+```
+
+The values of $\hat{\beta_0}$ and $\hat{\beta_1}$ are -1.02753 and 0.50698 respectively, which is pretty close to the true underlying values of -1 and 0.5. Since the p-value is significantly lower than 0.025, the null hypothesis can be rejected.
+
+f)
+```{r}
+plot(x, y)
+abline(fit9, col = "red")
+abline(-1, 0.5, col = "blue")
+legend("topleft", c("Least square", "Regression"), col = c("red", "blue"), lty = c(1, 1))
+```
+
+g) 
+```{r}
+fit10 <- lm(y ~ x + I(x^2))
+summary(fit10)
+```
+
+The p-value for $x^2$ is higher than 0.05, so it is not statistically significant. Therefore, we do not have enough evidence to show that the quadratic term improves the model fit.
+
+h) 
+```{r}
+set.seed(1)
+eps <- rnorm(100, sd = 0.125)
+x <- rnorm(100)
+y <- -1 + 0.5 * x + eps
+plot(x, y)
+fit11 <- lm(y ~ x)
+summary(fit11)
+abline(fit11, col = "red")
+abline(-1, 0.5, col = "blue")
+legend("topleft", c("Least square", "Regression"), col = c("red", "blue"), lty = c(1, 1))
+```
+
+Since we decreased the variance of the normal distribution where the noise is drawn from, we have reduced the amount of noise in the data. The coefficients are still very close to the previous ones, but the relationship is almost perfectly linear, the $R^2$ correlation is a lot higher (up to 0.9479), and the RSE is much lower. Since there ie less noise, the least squares and regression line also overlap a lot more.
+
+
+i) 
+```{r}
+set.seed(1)
+eps <- rnorm(100, sd = 0.5)
+x <- rnorm(100)
+y <- -1 + 0.5 * x + eps
+plot(x, y)
+fit12 <- lm(y ~ x)
+summary(fit12)
+abline(fit12, col = "red")
+abline(-1, 0.5, col = "blue")
+legend("topleft", c("Least square", "Regression"), col = c("red", "blue"), lty = c(1, 1))
+```
+
+After increasing the variance of the normal distribution where the noise is drawn from, we have increased the amount of noise in the data. The coefficients are still pretty close to their previous values, but the relationship between the data points isn't as linear as we just saw in h). The $R^2$ correlation is a decent amount lower (0.5317), and the RSE is a lot higher. The two lines, least square and regression, are pretty far apart compared to previous iterations, but are still relatively close.
+
+j) 
+```{r}
+confint(fit9)
+confint(fit11)
+confint(fit12)
+```
+
+The confidence intervals for $\beta_0$ are pretty strongly centered around 0.0, while the intervals for $\beta_1$ are all still centered around 0.5. One thing to note is as noise increases, the confidence intervals widen, indicating we are less confident on the specific value of the intercept and coefficient. Less noise indicates more predictability.
+
+### Chapter 3 - Exercise 14
+a) 
+```{r}
+set.seed(1)
+x1 <- runif(100)
+x2 <- 0.5 * x1 + rnorm(100)/10
+y <- 2 + 2 * x1 + 0.3 * x2 + rnorm(100)
+```
+
+The linear model is $Y = 2 + 2X_1 + 0.3X_2 + \epsilon$. The regression coefficients are 2 for the intercept, 2 for $X_1$, and 0.3 for $X_2$.
+
+b) 
+```{r}
+cor(x1, x2)
+plot(x1, x2)
+```
+
+c) 
+```{r}
+fit13 <- lm(y ~ x1 + x2)
+summary(fit13)
+```
+
+The coefficients are $\hat{\beta_0}$ = 2.1305, $\hat{\beta_1}$ = 1.4396, $\hat{\beta_2}$ = 1.0097. The only coefficient close to its underlying true value is $\hat{\beta_0}$. We can reject the null for $H_o: \hat{\beta_1} = 0$ since the p-value is less than 0.05. We fail to reject the null for $H_o: \hat{\beta_2} = 0$ since the p-value is higher than 0.05.
+
+d) 
+```{r}
+fit14 <- lm(y ~ x1)
+summary(fit14)
+```
+
+The coefficient for x1 has changed a lot compared to the x1 in the previous model containing both x1 and x2. We can reject the null since the p-value is extremely low (< 0.001).
+
+e) 
+```{r}
+fit15 <- lm(y ~ x2)
+summary(fit15)
+```
+
+The coefficient for x2 is very different from its value in the original model containing both x1 and x2 (x2 was almost 1.0). We can reject the null since the p-value is extremely low (< 0.001).
+
+f) 
+
+No, there is no contradiction. Both the x1 and x2 variables are highly correlated ($R^2$ = 0.8351212), so we are observing collinearity. As such, it is difficult to reasonably determine how much each predictor influences the response. You may recall we rejected $H_o$ for x1, but failed to reject $H_o$ for x2. This is partially due to collinearity. Since we failed to reject the null for x2, it seems like that variable is not important, but in fact its importance is masked by its collinearity with x1.
+
+g) 
+```{r}
+x1 <- c(x1, 0.1)
+x2 <- c(x2, 0.8)
+y <- c(y, 6)
+fit16 <- lm(y ~ x1 + x2)
+fit17 <- lm(y ~ x1)
+fit18 <- lm(y ~ x2)
+summary(fit16)
+summary(fit17)
+summary(fit18)
+plot(fit16)
+plot(fit17)
+plot(fit18)
+```
+
+In the first model with both predictors, the last point is a high-leverage point. In the model with just x1, the last point is an outlier. In the model with just x2, the last point is a high leverage point. This last point increased the x2 coefficient in the "x2-only" model from 2.8 to 3.3, changed the x1 coefficient in the "x1-only" model from 2.0 to 1.6, and made x1 almost non-existent in the "x1/x2" model, completely flipping the roles of x1 and x2 in the combined model. As such, this new point completely changed the coefficient values of this data's model.

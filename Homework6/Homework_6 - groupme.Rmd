@@ -1,0 +1,342 @@
+---
+title: "Homework 6 Applied Exercises"
+author: "Suprotik Debnath"
+date: "March 17, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Question 8)
+
+```{r}
+library(ISLR)
+library(gam)
+library(splines)
+library(leaps)
+library(glmnet)
+library(boot)
+library(readr)
+set.seed(1)
+pairs(Auto)
+```
+
+```{r}
+deltas <- rep(NA, 15)
+for (i in 1:15) {
+    fit <- glm(mpg ~ poly(displacement, i), data = Auto)
+    deltas[i] <- cv.glm(Auto, fit, K = 10)$delta[1]
+}
+plot(1:15, deltas, xlab = "Degree", ylab = "Test MSE", type = "l")
+d.min <- which.min(deltas)
+points(which.min(deltas), deltas[which.min(deltas)], col = "red", cex = 2, pch = 20)
+```
+We can see from all the scatterplots that mpg is negatively correlated to cylinders, displacement, horsepower and weight. We start our analysis by performing polynomial regression of wage vs displacement.
+
+```{r}
+cvs <- rep(NA, 10)
+for (i in 2:10) {
+    Auto$dis.cut <- cut(Auto$displacement, i)
+    fit <- glm(mpg ~ dis.cut, data = Auto)
+    cvs[i] <- cv.glm(Auto, fit, K = 10)$delta[1]
+}
+plot(2:10, cvs[-1], xlab = "Cuts", ylab = "Test MSE", type = "l")
+d.min <- which.min(cvs)
+points(which.min(cvs), cvs[which.min(cvs)], col = "red", cex = 2, pch = 20)
+```
+We can see that the best degree of freedom for the polynomial wage vs displacement is d = 11.
+
+```{r}
+cvs <- rep(NA, 10)
+for (i in 3:10) {
+    fit <- glm(mpg ~ ns(displacement, df = i), data = Auto)
+    cvs[i] <- cv.glm(Auto, fit, K = 10)$delta[1]
+}
+plot(3:10, cvs[-c(1, 2)], xlab = "Cuts", ylab = "Test MSE", type = "l")
+d.min <- which.min(cvs)
+points(which.min(cvs), cvs[which.min(cvs)], col = "red", cex = 2, pch = 20)
+```
+
+```{r}
+fit <- gam(mpg ~ s(displacement, 4) + s(horsepower, 4), data = Auto)
+summary(fit)
+```
+
+
+
+Question 9)
+
+Part A)
+
+```{r}
+library(MASS)
+set.seed(1)
+fit <- lm(nox ~ poly(dis, 3), data = Boston)
+summary(fit)
+```
+
+```{r}
+names(Boston)
+```
+
+
+```{r}
+dislims <- range(Boston$dis)
+dis.grid <- seq(from = dislims[1], to = dislims[2], by = 0.1)
+preds <- predict(fit, list(dis = dis.grid))
+plot(nox ~ dis, data = Boston, col = "black")
+lines(dis.grid, preds, col = "blue", lwd = 2)
+```
+We may conclude that all polynomial terms are significant.
+
+
+Part B)
+
+```{r}
+rss <- rep(NA, 10)
+for (i in 1:10) {
+    fit <- lm(nox ~ poly(dis, i), data = Boston)
+    rss[i] <- sum(fit$residuals^2)
+}
+plot(1:10, rss, xlab = "Degree", ylab = "RSS", type = "l")
+```
+It seems that the RSS decreases with the degree of the polynomial, and so is minimum for a polynomial of degree 10.
+
+
+Part C)
+
+```{r}
+deltas <- rep(NA, 10)
+for (i in 1:10) {
+    fit <- glm(nox ~ poly(dis, i), data = Boston)
+    deltas[i] <- cv.glm(Boston, fit, K = 10)$delta[1]
+}
+plot(1:10, deltas, xlab = "Degree", ylab = "Test MSE", type = "l")
+```
+We may see that a polynomial of degree 4 minimizes the test MSE.
+
+
+Part D)
+
+```{r}
+fit <- lm(nox ~ bs(dis, knots = c(4, 7, 11)), data = Boston)
+summary(fit)
+```
+
+```{r}
+pred <- predict(fit, list(dis = dis.grid))
+plot(nox ~ dis, data = Boston, col = "black")
+lines(dis.grid, preds, col = "blue", lwd = 2)
+```
+We may conclude that all terms in spline fit are significant.
+
+
+Part E)
+
+```{r}
+rss <- rep(NA, 16)
+for (i in 3:16) {
+    fit <- lm(nox ~ bs(dis, df = i), data = Boston)
+    rss[i] <- sum(fit$residuals^2)
+}
+plot(3:16, rss[-c(1, 2)], xlab = "Degrees of freedom", ylab = "RSS", type = "l")
+```
+We may see that RSS decreases until 14 and then slightly increases after that.
+
+
+Part F)
+
+```{r}
+cv <- rep(NA, 16)
+for (i in 3:16) {
+    fit <- glm(nox ~ bs(dis, df = i), data = Boston)
+    cv[i] <- cv.glm(Boston, fit, K = 10)$delta[1]
+}
+plot(3:16, cv[-c(1, 2)], xlab = "Degrees of freedom", ylab = "Test MSE", type = "l")
+```
+Test MSE is minimum for 10 degrees of freedom.
+
+
+Question 10) 
+
+Part A)
+
+```{r}
+set.seed(1)
+attach(College)
+train <- sample(length(Outstate), length(Outstate) / 2)
+test <- -train
+College.train <- College[train, ]
+College.test <- College[test, ]
+fit <- regsubsets(Outstate ~ ., data = College.train, nvmax = 17, method = "forward")
+fit.summary <- summary(fit)
+par(mfrow = c(1, 3))
+plot(fit.summary$cp, xlab = "Number of variables", ylab = "Cp", type = "l")
+min.cp <- min(fit.summary$cp)
+std.cp <- sd(fit.summary$cp)
+abline(h = min.cp + 0.2 * std.cp, col = "green", lty = 2)
+abline(h = min.cp - 0.2 * std.cp, col = "green", lty = 2)
+plot(fit.summary$bic, xlab = "Number of variables", ylab = "BIC", type='l')
+min.bic <- min(fit.summary$bic)
+std.bic <- sd(fit.summary$bic)
+abline(h = min.bic + 0.2 * std.bic, col = "green", lty = 2)
+abline(h = min.bic - 0.2 * std.bic, col = "green", lty = 2)
+plot(fit.summary$adjr2, xlab = "Number of variables", ylab = "Adjusted R2", type = "l", ylim = c(0.4, 0.84))
+max.adjr2 <- max(fit.summary$adjr2)
+std.adjr2 <- sd(fit.summary$adjr2)
+abline(h = max.adjr2 + 0.2 * std.adjr2, col = "green", lty = 2)
+abline(h = max.adjr2 - 0.2 * std.adjr2, col = "green", lty = 2)
+```
+
+```{r}
+fit <- regsubsets(Outstate ~ ., data = College, method = "forward")
+coeffs <- coef(fit, id = 6)
+names(coeffs)
+```
+Cp, BIC and adjr2 show that size 6 is the minimum size for the subset for which the scores are within 0.2 standard devitations of optimum.
+
+
+Part B)
+
+```{r}
+fit <- gam(Outstate ~ Private + s(Room.Board, df = 2) + s(PhD, df = 2) + s(perc.alumni, df = 2) + s(Expend, df = 5) + s(Grad.Rate, df = 2), data = College.train)
+par(mfrow = c(2, 3))
+plot(fit, se = T, col = "blue")
+```
+
+
+Part C)
+
+```{r}
+preds <- predict(fit, College.test)
+err <- mean((College.test$Outstate - preds)^2)
+err
+```
+
+```{r}
+tss <- mean((College.test$Outstate - mean(College.test$Outstate))^2)
+rss <- 1 - err / tss
+rss
+```
+We obtain a test R^2 value of 0.7696916 using GAM with 6 predictors.
+
+Part D)
+
+```{r}
+summary(fit)
+```
+ANOVA shows a strong evidence of non-linear relationship between "Outstate" and "Expend"", and a moderately strong non-linear relationship (using p-value of 0.05) between"Outstate" and "Grad.Rate"" or "PhD".
+
+
+
+Project Problem
+
+Problem 9 Procedure) 
+```{r}
+library(readr)
+OnlineNewsPopularity <- read.csv("OnlineNewsPopularity.csv")
+set.seed(1)
+fit <- lm(shares ~ poly(LDA_03, 3), data = OnlineNewsPopularity)
+summary(fit)
+
+LDA3lims <- range(OnlineNewsPopularity$LDA_03)
+LDA3.grid <- seq(from = LDA3lims[1], to = LDA3lims[2], by = 0.1)
+preds <- predict(fit, list(LDA_03 = LDA3.grid))
+plot(shares ~ LDA_03, data = OnlineNewsPopularity, col = "black")
+lines(LDA3.grid, preds, col = "blue", lwd = 2)
+```
+
+```{r}
+rss <- rep(NA, 10)
+for (i in 1:10) {
+    fit <- lm(shares ~ poly(LDA_03, i), data = OnlineNewsPopularity)
+    rss[i] <- sum(fit$residuals^2)
+}
+plot(1:10, rss, xlab = "Degree", ylab = "RSS", type = "l")
+
+deltas <- rep(NA, 10)
+for (i in 1:10) {
+    fit <- glm(shares ~ poly(LDA_03, i), data = OnlineNewsPopularity)
+    deltas[i] <- cv.glm(OnlineNewsPopularity, fit, K = 10)$delta[1]
+}
+plot(1:10, deltas, xlab = "Degree", ylab = "Test MSE", type = "l")
+```
+
+```{r}
+fit <- lm(shares ~ bs(LDA_03, knots = c(4, 7, 11)), data = OnlineNewsPopularity)
+summary(fit)
+
+pred <- predict(fit, list(LDA_03 = LDA3.grid))
+plot(shares ~ LDA_03, data = OnlineNewsPopularity, col = "black")
+lines(LDA3.grid, preds, col = "blue", lwd = 2)
+```
+
+```{r}
+rss <- rep(NA, 16)
+for (i in 3:16) {
+    fit <- lm(shares ~ bs(LDA_03, df = i), data = OnlineNewsPopularity)
+    rss[i] <- sum(fit$residuals^2)
+}
+plot(3:16, rss[-c(1, 2)], xlab = "Degrees of freedom", ylab = "RSS", type = "l")
+
+cv <- rep(NA, 16)
+for (i in 3:16) {
+    fit <- glm(shares ~ bs(LDA_03, df = i), data = OnlineNewsPopularity)
+    cv[i] <- cv.glm(OnlineNewsPopularity, fit, K = 10)$delta[1]
+}
+plot(3:16, cv[-c(1, 2)], xlab = "Degrees of freedom", ylab = "Test MSE", type = "l")
+```
+
+
+
+Problem 10 Procedure)
+
+```{r}
+set.seed(1)
+attach(OnlineNewsPopularity)
+train <- sample(length(self_reference_max_shares), length(self_reference_max_shares) / 2)
+test <- -train
+OnlineNewsPopularity.train <- OnlineNewsPopularity[train, ]
+OnlineNewsPopularity.test <- OnlineNewsPopularity[test, ]
+fit <- regsubsets(shares ~ LDA_03 + is_weekend + num_keywords + self_reference_max_shares, data = OnlineNewsPopularity.train, nvmax = 60, method = "forward")
+fit.summary <- summary(fit)
+par(mfrow = c(1, 3))
+plot(fit.summary$cp, xlab = "Number of variables", ylab = "Cp", type = "l")
+min.cp <- min(fit.summary$cp)
+std.cp <- sd(fit.summary$cp)
+abline(h = min.cp + 0.2 * std.cp, col = "green", lty = 2)
+abline(h = min.cp - 0.2 * std.cp, col = "green", lty = 2)
+plot(fit.summary$bic, xlab = "Number of variables", ylab = "BIC", type='l')
+min.bic <- min(fit.summary$bic)
+std.bic <- sd(fit.summary$bic)
+abline(h = min.bic + 0.2 * std.bic, col = "green", lty = 2)
+abline(h = min.bic - 0.2 * std.bic, col = "green", lty = 2)
+plot(fit.summary$adjr2, xlab = "Number of variables", ylab = "Adjusted R2", type = "l", ylim = c(0.4, 0.84))
+max.adjr2 <- max(fit.summary$adjr2)
+std.adjr2 <- sd(fit.summary$adjr2)
+abline(h = max.adjr2 + 0.2 * std.adjr2, col = "green", lty = 2)
+abline(h = max.adjr2 - 0.2 * std.adjr2, col = "green", lty = 2)
+```
+
+```{r}
+preds <- predict(fit, OnlineNewsPopularity.test)
+err <- mean((OnlineNewsPopularity.test$self_reference_max_shares - preds)^2)
+err
+```
+
+```{r}
+tss <- mean((OnlineNewsPopularity.test$self_reference_max_shares - mean(OnlineNewsPopularity.test$self_reference_max_shares))^2)
+rss <- 1 - err / tss
+rss
+```
+
+```{r}
+summary(fit)
+```
+
+
+Analysis: 
+
+From the procedures in Problems 9 and 10, I am able to make some more specific conclusions as to what model type would work best. From utilizing polynomial regression, it appears that Test MSE decreases as more terms are added (although this could only be pertinent to the predictor I used, LDA_03). From the first plot generated, there seems to be a relatively straight line for the terms, so it appears that LDA_03 is not significant, although further analysis is required. From using splines and GAMs, it appears that the graphs depicting Cp and BIC show that the ideal number of predictors to use is 3. Previously, when I was analyzing the predictors through regression and classification techniques, I was unsure of how many variables and combinations of variables to use from the pool of 59 predictors. By seeing the number of variables to use, we drastically narrow down our number of potential models to 32509. From here, we can further simplify our model using lasso (as we did in our project) and gain a very high prediction accuracy based on using significant predictors that contribute to article virality. As my group researched more and more, we saw that if we simply apply a normal distribution to the data set, it accounts for the extreme outliers that were present in the data set, as well as the large range of skewness that occurs when we try to see our normal data distribution. We had originally gotten a 98.1% prediction accuracy, which is unreasonably high, since we could predict whether an article would become viral or not with 98%  confidence, which is why we decreased the interval to the 75th percentile, giving us a prediction accuracy of 78.17%. Splines, GAMs, and polynomial regression allowed me to see how many variables to use in order to make the model simple, interpretable, and significant, which I could not originally see from using regression or classification techniques. For future analysis, I will most likely generate graphs with different significant predictors (rather than using LDA_03 or self_reference_max_shares) to see what types of graphs I get, and whether the results are consistent with my original findings. Currently, it is difficult to see which models may work (since there are a variety of combinations that can be used to find the best model). However, this will be our main focus in the coming weeks.
